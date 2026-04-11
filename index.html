@@ -3972,12 +3972,13 @@ function renderCashflow(){
   h+='</tr>';
 
   h+=cfRowSh('Despesas fixas',  dfiQ, recQ, 'cf-exp');
-  h+=cfRowSh('Investimentos',   invQ, recQ, 'cf-exp');
 
   // Lucro operacional — verde escuro
   h+='<tr class="cf-res cf-res-op"><td>Lucro operacional</td>';
   lo.forEach(function(v,i){ h+=cfCells(lo,i,recQ[i],i>0?lo[i-1]:null); });
   h+='</tr>';
+
+  h+=cfRowSh('Investimentos',   invQ, recQ, 'cf-exp');
 
   // Lucro líquido — verde escuro
   h+='<tr class="cf-res cf-res-op"><td>Lucro líquido</td>';
