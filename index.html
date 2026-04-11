@@ -319,10 +319,22 @@ tbody td.dim{color:var(--t3);font-size:11px}
 /* Saldo final */
 .cf-sf td:first-child{color:var(--blue)!important;font-weight:700!important;font-family:var(--font)!important;border-left:3px solid var(--blue)}
 .cf-sf td{font-weight:700!important;border-top:2px solid var(--b2)!important}
-/* Valores coloridos */
+/* Valores coloridos por contexto */
 .cf-vp{color:var(--green)}
 .cf-vn{color:var(--red)}
 .cf-v0{color:var(--t4)}
+/* Cor do label (td:first-child) por tipo de linha */
+.cf-rec td:first-child{color:#16A34A!important;font-weight:600!important}
+.cf-exp td:first-child{color:#DC2626!important;font-weight:500!important}
+.cf-res-op td:first-child{color:#15803D!important;font-weight:700!important}
+.cf-si td:first-child{color:#2563EB!important;font-weight:700!important}
+.cf-sf td:first-child{color:#1D4ED8!important;font-weight:700!important}
+/* Cor dos valores por tipo de linha */
+.cf-rec td .cf-vp,.cf-rec td .cf-vn,.cf-rec td .cf-v0{color:#16A34A!important}
+.cf-exp td .cf-vp,.cf-exp td .cf-vn,.cf-exp td .cf-v0{color:#DC2626!important}
+.cf-res-op td .cf-vp,.cf-res-op td .cf-vn,.cf-res-op td .cf-v0{color:#15803D!important;font-weight:600}
+.cf-si td .cf-vp,.cf-si td .cf-vn,.cf-si td .cf-v0{color:#2563EB!important;font-weight:600}
+.cf-sf td .cf-vp,.cf-sf td .cf-vn,.cf-sf td .cf-v0{color:#1D4ED8!important;font-weight:700}
 /* AH badges */
 .cf-ahp{color:var(--green)}
 .cf-ahn{color:var(--red)}
@@ -3946,35 +3958,35 @@ function renderCashflow(){
   siQ.forEach(function(v,i){ h+=cfCells(siQ,i,null,i>0?siQ[i-1]:null); });
   h+='</tr>';
 
-  // Entradas
+  // Entradas — verde claro
   h+='<tr class="cf-sec"><td colspan="'+showCols+'">Entradas</td></tr>';
-  h+=cfRowSh('Receitas brutas', recQ, null, '');
+  h+=cfRowSh('Receitas brutas', recQ, null, 'cf-rec');
 
-  // Saídas
+  // Saídas — vermelho
   h+='<tr class="cf-sec"><td colspan="'+showCols+'">Saídas operacionais</td></tr>';
-  h+=cfRowSh('Custos variáveis', cvaQ, recQ, '');
+  h+=cfRowSh('Custos variáveis', cvaQ, recQ, 'cf-exp');
 
   // Lucro bruto
   h+='<tr class="cf-tot"><td>Lucro bruto</td>';
   lb.forEach(function(v,i){ h+=cfCells(lb,i,recQ[i],i>0?lb[i-1]:null); });
   h+='</tr>';
 
-  h+=cfRowSh('Despesas fixas',  dfiQ, recQ, '');
-  h+=cfRowSh('Investimentos',   invQ, recQ, '');
+  h+=cfRowSh('Despesas fixas',  dfiQ, recQ, 'cf-exp');
+  h+=cfRowSh('Investimentos',   invQ, recQ, 'cf-exp');
 
-  // Lucro operacional
-  h+='<tr class="cf-res"><td>Lucro operacional</td>';
+  // Lucro operacional — verde escuro
+  h+='<tr class="cf-res cf-res-op"><td>Lucro operacional</td>';
   lo.forEach(function(v,i){ h+=cfCells(lo,i,recQ[i],i>0?lo[i-1]:null); });
   h+='</tr>';
 
-  // Lucro líquido
-  h+='<tr class="cf-res"><td>Lucro líquido</td>';
+  // Lucro líquido — verde escuro
+  h+='<tr class="cf-res cf-res-op"><td>Lucro líquido</td>';
   ll.forEach(function(v,i){ h+=cfCells(ll,i,recQ[i],i>0?ll[i-1]:null); });
   h+='</tr>';
 
-  // Retiradas
+  // Retiradas — vermelho
   h+='<tr class="cf-sec"><td colspan="'+showCols+'">Retiradas</td></tr>';
-  h+=cfRowSh('Retiradas de lucro', retQ, recQ, '');
+  h+=cfRowSh('Retiradas de lucro', retQ, recQ, 'cf-exp');
 
   // Geração de caixa
   h+='<tr class="cf-tot"><td>Geração de caixa</td>';
