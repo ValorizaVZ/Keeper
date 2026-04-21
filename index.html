@@ -258,6 +258,7 @@ tbody td.dim{color:var(--t3);font-size:11px}
 .cfg-cdot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:all .15s;flex-shrink:0}
 .cfg-cdot.sel{border-color:#fff;outline:2px solid var(--co);box-shadow:0 2px 6px rgba(0,0,0,.2)}
 
+
 /* ── META ANUAL ── */
 .meta-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 20px;box-shadow:var(--sh);margin-bottom:15px;transition:box-shadow var(--tm)}
 .meta-card:hover{box-shadow:var(--shm)}
@@ -338,6 +339,8 @@ tbody td.dim{color:var(--t3);font-size:11px}
 /* AH badges */
 .cf-ahp{color:var(--green)}
 .cf-ahn{color:var(--red)}
+.cf-edit-inp{font-family:var(--mono);font-size:12px;border:none;border-bottom:1.5px solid #93C5FD;background:transparent;color:#1D4ED8;width:130px;text-align:right;outline:none;padding:2px 4px;font-weight:600}
+.cf-edit-inp:focus{border-bottom-color:#2563EB}
 .ainfo{background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--blue);display:flex;align-items:flex-start;gap:7px}
 .awarn{background:var(--amber-lt);border:1px solid var(--amber-md);border-radius:6px;padding:9px 12px;font-size:12px;color:var(--amber)}
 .empty{text-align:center;padding:36px 16px}
@@ -797,6 +800,8 @@ body.pres #app{margin-top:34px}
           <div><div class="pt">Configurações</div><div class="ps">Dados da empresa e tipos de recebimento</div></div>
         </div>
 
+
+
         <!-- DADOS DA EMPRESA -->
         <div class="panel mb14">
           <div class="ph2" style="padding-bottom:0">
@@ -1089,81 +1094,23 @@ function syncErr(err){
 
 // ── CARREGAMENTO INICIAL ──────────────────────────────────────────
 async function init(){
-  // 1. Carrega cache local primeiro — resposta imediata
   const hasCached = loadLocalCache();
   buildSidebar();
   updMo();
   CACHE._loaded = true;
-  if(hasCached){
-    restorePage();
-    renderCurrentPage();
-    setSyncPill('busy', 'Atualizando…');
-  } else {
-    restorePage();
-    renderCurrentPage();
-    setSyncPill('busy', 'Carregando…');
-  }
-
-  // Inicializar seletor de ano do fluxo de caixa
   initCashflowAno();
-  // 2. Sempre tenta buscar do Sheets em background
-  // Se o Sheets tiver dados → atualiza (garante que outro computador veja tudo)
-  // Se o Sheets estiver vazio e tiver dados locais → mantém local (não perde nada)
+  restorePage();
+  renderCurrentPage();
+  setSyncPill('busy', hasCached?'Atualizando…':'Carregando…');
   try{
     await pullFromSheets();
     renderCurrentPage();
   } catch(e){
-    // Sem internet ou erro — usa o que tem no cache local
-    setSyncPill('err', 'Sem conexão');
-    if(!hasCached){
-      toast('Sem conexão com o Sheets. Verifique a internet.', 'warn');
-    }
+    setSyncPill('err','Sem conexão');
+    if(!hasCached) toast('Sem conexão com o Sheets.','warn');
   }
 }
 
-function fixYm(raw){
-  if(!raw) return null;
-  var s=fixDateStr(String(raw).trim());
-  if(!s) return null;
-  return s.slice(0,7);
-}
-
-function fixDateStr(v){
-  // Converte qualquer formato de data para string simples
-  if(!v) return '';
-  var s=String(v).trim();
-  // Já é YYYY-MM-DD
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // Já é YYYY-MM
-  if(/^\d{4}-\d{2}$/.test(s)) return s;
-  // É data completa (ex: "Thu Jan 01 2026...")
-  try{
-    var d=new Date(s);
-    if(!isNaN(d.getTime())){
-      var y=d.getFullYear();
-      var m=String(d.getMonth()+1).padStart(2,'0');
-      var day=String(d.getDate()).padStart(2,'0');
-      return y+'-'+m+'-'+day;
-    }
-  }catch(e){}
-  return s;
-}
-
-function fixValueStr(v){
-  // Converte qualquer formato para número float (uso interno)
-  if(v===null||v===undefined||v==='') return '0';
-  if(typeof v==='number') return String(Math.round(v*100)/100);
-  var s=String(v).trim();
-  if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.');
-  var n=parseFloat(s);
-  return isNaN(n)?'0':String(Math.round(n*100)/100);
-}
-
-function fmtBRForSheets(v){
-  // Formata número para salvar no Sheets no padrão BR: 1.000,89
-  var n=parseFloat(fixValueStr(v))||0;
-  return n.toFixed(2).replace('.',',').replace(/(\d)(?=(\d{3})+,)/g,'$1.');
-}
 
 async function pullFromSheets(){
   const data = await api({action:'readAll'});
@@ -1217,18 +1164,19 @@ async function pullFromSheets(){
   });
   // Histórico
   CACHE.history = data.history || [];
-  // Settings — preservar tipos novos criados pelo usuário
+  // Settings — preservar tipos e usuários locais ao puxar do Sheets
   var oldTypesRaw = CACHE.settings['__types__'] || '';
+  var oldUsersRaw = CACHE.settings['__users__'] || '';
   CACHE.settings = {};
   (data.settings||[]).forEach(function(s){ CACHE.settings[s.key]=s.value; });
-  // Mesclar tipos: se Sheets não tiver __types__ ou tiver menos, preservar os locais
+
+  // Mesclar tipos customizados
   if(oldTypesRaw){
     try{
       var oldTypes=JSON.parse(oldTypesRaw)||[];
       var newTypesRaw=CACHE.settings['__types__']||'[]';
       var newTypes=JSON.parse(newTypesRaw)||[];
       var defaultIds=TYP_DEFAULT.map(function(t){return t.id;});
-      // Juntar: tipos do Sheets + tipos locais que não estão no Sheets
       var merged=newTypes.slice();
       oldTypes.forEach(function(t){
         if(defaultIds.indexOf(t.id)<0 && !merged.find(function(x){return x.id===t.id;})){
@@ -1237,6 +1185,18 @@ async function pullFromSheets(){
       });
       if(merged.length>0) CACHE.settings['__types__']=JSON.stringify(merged);
     }catch(e){}
+  }
+
+  // Preservar usuários: se Sheets veio vazio mas local tem usuários, manter local
+  // Se Sheets tem usuários, usar os do Sheets (fonte de verdade)
+  var sheetsUsers=[];
+  try{ sheetsUsers=JSON.parse(CACHE.settings['__users__']||'[]')||[]; }catch(e){}
+  var localUsers=[];
+  try{ localUsers=JSON.parse(oldUsersRaw||'[]')||[]; }catch(e){}
+  if(!sheetsUsers.length && localUsers.length){
+    // Sheets vazio mas local tem — restaurar local e sincronizar pro Sheets
+    CACHE.settings['__users__']=oldUsersRaw;
+    queueWrite('settings',[{key:'__users__',value:oldUsersRaw}]);
   }
   // Serviços
   CACHE.services = (data.services||[]).map(function(s){
@@ -1267,6 +1227,13 @@ function queueWrite(sheet, rows){
   clearTimeout(writeTimer);
   writeTimer = setTimeout(flushWriteQueue, 2000);
 }
+function fixYm(raw){
+  if(!raw) return null;
+  var s=fixDateStr(String(raw).trim());
+  if(!s) return null;
+  return s.slice(0,7);
+}
+
 function fixDateStr(v){
   // Converte qualquer formato de data para string simples
   if(!v) return '';
@@ -2586,7 +2553,16 @@ function renderPricing(){
 
 function togPricDetail(id){
   const el=document.getElementById('pd-'+id);
-  if(el) el.style.display=el.style.display==='none'?'block':'none';
+  if(!el) return;
+  const opening=el.style.display==='none';
+  el.style.display=opening?'block':'none';
+  if(opening){
+    // Scroll suave para o card, sem pular pro topo
+    const card=el.closest('.pric-svc');
+    if(card) setTimeout(function(){
+      card.scrollIntoView({behavior:'smooth',block:'nearest'});
+    },50);
+  }
 }
 
 function getAvgExpense(descNorm, months, subNorm){
@@ -2620,208 +2596,179 @@ function calcSvcCost(svc){
   const fundoVal=parseValorBRL(svc.fundoVal||0);
   const fundoDiv=+svc.fundoDiv||1;
   if(fundoVal>0) base+=fundoVal/fundoDiv;
-  // Investimento meta: valor / divisor
-  const metaVal=parseValorBRL(svc.metaVal||0);
-  const metaDiv=+svc.metaDiv||1;
-  if(metaVal>0) base+=metaVal/metaDiv;
   return base;
 }
 
 function calcSvcPrice(svc){
+  // Se o usuário definiu preço alvo, usar ele; senão calcular
+  if(svc.precoAlvo&&parseValorBRL(svc.precoAlvo)>0) return parseValorBRL(svc.precoAlvo);
   const cost=calcSvcCost(svc);
   const margin=+svc.margin||0;
   const tax=+svc.tax||0;
   if(margin===0&&tax===0)return cost;
-  // Preço = Custo / (1 - Margem% - Imposto%)
   const factor=1-(margin/100)-(tax/100);
   return factor>0?cost/factor:cost;
 }
 
 function buildSvcDetail(svc,cost,price){
-  // Nº de funcionários: sempre busca das configurações da empresa
-  const cfgEmps = getCfgEmps();
-  const emps=cfgEmps;
+  const cfgEmps=getCfgEmps();
   const months=+svc.months||6;
   const cap=+svc.cap||0;
   const atual=+svc.atual||0;
   const margin=+svc.margin||0;
   const tax=+svc.tax||0;
-  const marginVal = cost*(margin/100);
-  const taxVal    = cost*(tax/100);
-  const totalOp   = cost+marginVal+taxVal;
-  const custoPorCliente = cap>0 ? totalOp/cap : 0;
+  const fator=1-(margin/100)-(tax/100);
 
-  let html='<div style="font-size:10.5px;color:var(--t3);margin-bottom:10px">Média dos últimos '+months+' meses · <strong>'+cfgEmps+'</strong> funcionário'+(cfgEmps!==1?'s':'')+' (configurado em Configurações da empresa)</div>';
-
-  // Itens (fornecedores)
-  if((svc.items||[]).length){
-    html+='<div style="margin-bottom:12px">';
-    html+='<div style="display:grid;grid-template-columns:1fr 90px 110px 90px;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em"><span>Despesa</span><span style="text-align:right">Média mensal</span><span style="text-align:center">Rateio</span><span style="text-align:right">Valor no serviço</span></div>';
-    (svc.items||[]).forEach(function(item,idx){
-      const avg=getAvgExpense(norm(item.desc),months,item.sub?norm(item.sub):undefined);
-      // Divisor: usa customDivisor se definido, senão cfgEmps
-      const divisor=item.customDivisor&&item.customDivisor>0?+item.customDivisor:cfgEmps;
-      const v=item.rateio?avg/divisor:avg;
-      const nItem=norm(item.desc).replace(/[^a-z0-9]/g,'').slice(0,15);
-      const inputId='rat_'+svc.id+'_'+idx;
-      // Coluna de rateio: mostra "total" ou campo editável com divisor
-      var ratCell='';
-      if(item.rateio){
-        ratCell='<span style="display:flex;align-items:center;justify-content:center;gap:3px">'+
-          '<span style="color:var(--t4);font-size:10.5px">÷</span>'+
-          '<input type="number" id="'+inputId+'" value="'+divisor+'" min="1" '+
-            'data-sid="'+svc.id+'" data-idx="'+idx+'" '+
-            'style="width:42px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;text-align:center;background:var(--surface)" '+
-            'onchange="updateItemDivisor(this)" title="Alterar divisor para este item">'+
-          '</span>';
-      } else {
-        ratCell='<span style="color:var(--t4);font-size:10.5px;text-align:center">total</span>';
-      }
-      html+='<div class="pric-item-row"><span class="pric-item-nm">'+item.desc+(item.sub?'<span style="font-size:9.5px;color:var(--t4);margin-left:5px">'+item.sub+'</span>':'')+'</span><span class="pric-item-avg">'+R$(avg)+'</span><span class="pric-item-rat">'+ratCell+'</span><span class="pric-item-val">'+R$(v)+'</span></div>';
-    });
-    html+='</div>';
-  } else {
-    html+='<p style="font-size:12px;color:var(--t3);margin-bottom:10px">Nenhuma despesa vinculada.</p>';
-  }
-
-  // Barra de capacidade
-  if(cap>0){
-    const pctCap=Math.min(atual/cap*100,100);
-    const disponivel=Math.max(cap-atual,0);
-    const capColor=pctCap>=90?'var(--red)':pctCap>=70?'var(--amber)':'var(--green)';
-    html+='<div style="margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r);border:1px solid var(--border)">';
-    html+='<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
-    html+='<span style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em">Capacidade Operacional</span>';
-    html+='<span style="font-family:var(--mono);font-size:11px;color:var(--t2)">'+atual+' / '+cap+' clientes</span>';
-    html+='</div>';
-    html+='<div class="pric-cap-bar"><div class="pric-cap-fill" style="width:'+pctCap.toFixed(1)+'%;background:'+capColor+'"></div></div>';
-    html+='<div class="pric-cap-info"><span>'+atual+' atendendo</span><span style="color:'+capColor+'">'+pctCap.toFixed(1)+'% ocupado</span><span>'+disponivel+' disponíveis</span></div>';
-    html+='</div>';
-  }
-
-  // Resultado financeiro
-  const mopts=[3,6,12].map(function(m){return '<option value="'+m+'"'+((svc.months||6)==m?' selected':'')+'>'+m+' meses</option>';}).join('');
-  // Calcular parcelas individuais para exibir
+  // Fundo de reserva
   const fundoVal=parseValorBRL(svc.fundoVal||0);
   const fundoDiv=+svc.fundoDiv||1;
   const fundoParc=fundoVal>0?fundoVal/fundoDiv:0;
-  const metaVal=parseValorBRL(svc.metaVal||0);
-  const metaDiv=+svc.metaDiv||1;
-  const metaParc=metaVal>0?metaVal/metaDiv:0;
-  // Custo base sem fundo e meta (só despesas)
-  const custoBase=cost-fundoParc-metaParc;
+  const custoBase=cost-fundoParc;
+  const baseTotal=custoBase+fundoParc;
 
-  html+='<div class="pric-result">';
-  // Custo Operação (base — só despesas)
-  html+='<div class="pric-res-row"><span>Custo Operação</span><span class="pric-res-val">'+R$(custoBase)+'</span></div>';
+  // Preço sugerido = baseTotal / atual / fator
+  const custoPorCliente=atual>0?baseTotal/atual:0;
+  const precoSugerido=fator>0&&atual>0?custoPorCliente/fator:0;
 
-  // Fundo de Reserva
-  html+='<div class="pric-res-row" style="align-items:center"><span>Fundo de Reserva</span>'+
-    '<span style="display:flex;align-items:center;gap:6px">'+
-      '<input type="text" value="'+(svc.fundoVal||'')+'" placeholder="R$ 0,00" '+
-        'data-sid="'+svc.id+'" data-par="fundoVal" '+
-        'style="width:110px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" '+
-        'onchange="updateSvcParamEl(this)" onblur="renderPricing()">'+
-      '<span style="color:var(--t4);font-size:11px">÷</span>'+
-      '<input type="number" value="'+(svc.fundoDiv||'')+'" placeholder="1" min="1" '+
-        'data-sid="'+svc.id+'" data-par="fundoDiv" '+
-        'style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:center" '+
-        'onchange="updateSvcParamEl(this)" onblur="renderPricing()">'+
-      '<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">'+(fundoVal>0?'= '+R$(fundoParc)+'/Rateio':'')+'</span>'+
-    '</span>'+
-  '</div>';
+  // Preço simulado pelo usuário
+  const precoAlvo=parseValorBRL(svc.precoAlvo||0);
+  const simClientes=+svc.simClientes||atual||0;
 
-  // Investimento Meta
-  html+='<div class="pric-res-row" style="align-items:center"><span>Investimento Meta</span>'+
-    '<span style="display:flex;align-items:center;gap:6px">'+
-      '<input type="text" value="'+(svc.metaVal||'')+'" placeholder="R$ 0,00" '+
-        'data-sid="'+svc.id+'" data-par="metaVal" '+
-        'style="width:110px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" '+
-        'onchange="updateSvcParamEl(this)" onblur="renderPricing()">'+
-      '<span style="color:var(--t4);font-size:11px">÷</span>'+
-      '<input type="number" value="'+(svc.metaDiv||'')+'" placeholder="1" min="1" '+
-        'data-sid="'+svc.id+'" data-par="metaDiv" '+
-        'style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:center" '+
-        'onchange="updateSvcParamEl(this)" onblur="renderPricing()">'+
-      '<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">'+(metaVal>0?'= '+R$(metaParc)+'/Rateio':'')+'</span>'+
-    '</span>'+
-  '</div>';
+  let h='<div style="font-size:10.5px;color:var(--t3);margin-bottom:10px">Média dos últimos '+months+' meses · <strong>'+cfgEmps+'</strong> func. (Configurações)</div>';
 
-  // Margem
-  html+='<div class="pric-res-row"><span>Margem desejada</span><span style="display:flex;align-items:center;gap:5px"><input type="number" value="'+(svc.margin||0)+'" min="0" max="100" step="0.5" data-sid="'+svc.id+'" data-par="margin" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" onchange="updateSvcParamEl(this)"> %<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">(+'+R$(marginVal)+')</span></span></div>';
-  // Imposto
-  html+='<div class="pric-res-row"><span>Imposto</span><span style="display:flex;align-items:center;gap:5px"><input type="number" value="'+(svc.tax||0)+'" min="0" max="100" step="0.5" data-sid="'+svc.id+'" data-par="tax" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" onchange="updateSvcParamEl(this)"> %<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">(+'+R$(taxVal)+')</span></span></div>';
-  // Total operação
-  html+='<div class="pric-res-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px;font-weight:600"><span>Total Operação</span><span class="pric-res-val">'+R$(totalOp)+'</span></div>';
-  // Capacidade
+  // ── ITENS DE CUSTO ────────────────────────────────────────────────
+  if((svc.items||[]).length){
+    h+='<div style="margin-bottom:12px">';
+    h+='<div style="display:grid;grid-template-columns:1fr 90px 110px 90px;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em"><span>Despesa</span><span style="text-align:right">Média mensal</span><span style="text-align:center">Rateio</span><span style="text-align:right">No serviço</span></div>';
+    (svc.items||[]).forEach(function(item,i){
+      var avg=getAvgExpense(norm(item.desc),months,item.sub?norm(item.sub):undefined);
+      var divisor=item.rateio?(item.customDivisor&&item.customDivisor>0?+item.customDivisor:cfgEmps):1;
+      var v=item.rateio?avg/divisor:avg;
+      var ratCell=item.rateio?
+        '<span style="display:flex;align-items:center;justify-content:center;gap:3px"><span style="color:var(--t4);font-size:10.5px">÷</span><input type="number" value="'+divisor+'" min="1" data-sid="'+svc.id+'" data-idx="'+i+'" style="width:42px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;text-align:center" onchange="updateItemDivisor(this)"></span>':
+        '<span style="color:var(--t4);font-size:10.5px;text-align:center;display:block">total</span>';
+      h+='<div class="pric-item-row"><span class="pric-item-nm">'+item.desc+(item.sub?'<span style="font-size:9.5px;color:var(--t4);margin-left:5px">'+item.sub+'</span>':'')+'</span><span class="pric-item-avg">'+R$(avg)+'</span><span class="pric-item-rat">'+ratCell+'</span><span class="pric-item-val">'+R$(v)+'</span></div>';
+    });
+    h+='</div>';
+  }
+
+  // ── CAPACIDADE ────────────────────────────────────────────────────
   if(cap>0){
-    html+='<div class="pric-res-row total" style="margin-top:4px"><span>÷ Capacidade ('+cap+' clientes)</span><span class="pric-res-val price">'+R$(custoPorCliente)+' custo por cliente</span></div>';
-  } else {
-    html+='<div class="pric-res-row" style="margin-top:4px"><span style="color:var(--t4);font-size:11px">Defina a capacidade operacional para calcular o custo por cliente</span></div>';
-  }
-  // Período histórico
-  html+='<div class="pric-res-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><span style="font-size:10.5px;color:var(--t3)">Período histórico</span><span><select style="padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-family:var(--font);font-size:12px" data-sid="'+svc.id+'" data-par="months" onchange="updateSvcParamEl(this)">'+mopts+'</select></span></div>';
-  html+='</div>';
-
-  // ── PREÇO DE VENDA SUGERIDO ────────────────────────────────────
-  // Preço de venda = Custo por cliente ÷ (1 - Margem%)
-  // Garante a margem desejada sobre o preço de venda
-  if(cap>0 && margin>0){
-    const precoVenda  = custoPorCliente / (1 - margin/100);
-    const lucroCliente= precoVenda - custoPorCliente;
-    const margemReal  = (lucroCliente / precoVenda) * 100;
-    // Ponto de equilíbrio: quantos clientes cobrem o custo total
-    const breakeven   = totalOp > 0 ? Math.ceil(totalOp / precoVenda) : 0;
-
-    html+='<div class="pric-price-box">';
-    html+='<div class="pric-price-lbl">💲 Preço de Venda Sugerido (por cliente)</div>';
-    html+='<div class="pric-price-val">'+R$(precoVenda)+'</div>';
-    html+='<div class="pric-price-sub">Para atingir margem de '+margin.toFixed(2).replace('.',',')+'% sobre o preço de venda</div>';
-    html+='<div class="pric-price-grid">';
-    html+='<div class="pric-price-stat"><div class="pric-price-stat-lbl">Custo/cliente</div><div class="pric-price-stat-val">'+R$(custoPorCliente)+'</div></div>';
-    html+='<div class="pric-price-stat"><div class="pric-price-stat-lbl">Lucro/cliente</div><div class="pric-price-stat-val">'+R$(lucroCliente)+'</div></div>';
-    html+='<div class="pric-price-stat"><div class="pric-price-stat-lbl">Margem real</div><div class="pric-price-stat-val">'+margemReal.toFixed(2).replace('.',',')+'%</div></div>';
-    html+='</div>';
-    if(breakeven>0){
-      html+='<div style="margin-top:8px;font-size:10.5px;color:var(--co);opacity:.8">Ponto de equilíbrio: <strong>'+breakeven+' clientes</strong> para cobrir o custo total da operação</div>';
-    }
-    html+='</div>';
-  } else if(cap>0 && margin===0){
-    html+='<div style="margin-top:10px;padding:10px 12px;background:var(--amber-lt);border:1px solid var(--amber-md);border-radius:var(--r);font-size:11.5px;color:var(--amber)">⚠ Defina a margem desejada para calcular o preço de venda sugerido</div>';
+    var pctCap=Math.min(atual/cap*100,100);
+    var capColor=pctCap>=90?'var(--red)':pctCap>=70?'var(--amber)':'var(--green)';
+    h+='<div style="margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r);border:1px solid var(--border)">';
+    h+='<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em">Capacidade Operacional</span><span style="font-family:var(--mono);font-size:11px;color:var(--t2)">'+atual+' atendendo / '+cap+' capacidade</span></div>';
+    h+='<div class="pric-cap-bar"><div class="pric-cap-fill" style="width:'+pctCap.toFixed(1)+'%;background:'+capColor+'"></div></div>';
+    h+='<div class="pric-cap-info"><span>'+Math.max(cap-atual,0)+' vagas disponíveis</span><span style="color:'+capColor+'">'+pctCap.toFixed(1)+'% ocupado</span></div>';
+    h+='</div>';
   }
 
-  return html;
+  // ── PAINEL DE CONFIGURAÇÃO ────────────────────────────────────────
+  h+='<div class="pric-result" style="margin-bottom:12px">';
+  h+='<div class="pric-res-row"><span>Custo Operação</span><span class="pric-res-val">'+R$(custoBase)+'</span></div>';
+  h+='<div class="pric-res-row" style="align-items:center"><span>Fundo de Reserva</span>'+
+    '<span style="display:flex;align-items:center;gap:6px">'+
+      '<input type="text" value="'+(svc.fundoVal?'R$ '+parseValorBRL(svc.fundoVal).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):'')+'" placeholder="R$ 0,00" data-sid="'+svc.id+'" data-par="fundoVal" style="width:120px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" oninput="maskBRL(this)" onblur="blurBRL(this);updateSvcParamEl(this)">'+
+      '<span style="color:var(--t4);font-size:11px">÷</span>'+
+      '<input type="number" value="'+(svc.fundoDiv||12)+'" placeholder="12" min="1" data-sid="'+svc.id+'" data-par="fundoDiv" style="width:50px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:center" onchange="updateSvcParamEl(this)">'+
+      (fundoVal>0?'<span style="font-family:var(--mono);font-size:11px;color:var(--t3)">= '+R$(fundoParc)+'/mês</span>':'')+'</span></div>';
+  h+='<div class="pric-res-row"><span>Margem desejada</span><span style="display:flex;align-items:center;gap:5px"><input type="number" value="'+(margin||0)+'" min="0" max="100" step="0.5" data-sid="'+svc.id+'" data-par="margin" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" onchange="updateSvcParamEl(this)"> <span style="color:var(--t3)">%</span></span></div>';
+  h+='<div class="pric-res-row"><span>Imposto</span><span style="display:flex;align-items:center;gap:5px"><input type="number" value="'+(svc.tax||0)+'" min="0" max="100" step="0.5" data-sid="'+svc.id+'" data-par="tax" style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:12px;text-align:right" onchange="updateSvcParamEl(this)"> <span style="color:var(--t3)">%</span></span></div>';
+  var mopts=[3,6,12].map(function(m){return '<option value="'+m+'"'+((svc.months||6)==m?' selected':'')+'>'+m+' meses</option>';}).join('');
+  h+='<div class="pric-res-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:8px"><span style="font-size:10.5px;color:var(--t3)">Período histórico</span><span><select style="padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-size:12px" data-sid="'+svc.id+'" data-par="months" onchange="updateSvcParamEl(this)">'+mopts+'</select></span></div>';
+  h+='</div>';
+
+  // ── BLOCO AZUL: TOTAL + PREÇO SUGERIDO ────────────────────────────
+  if(atual>0&&fator>0){
+    var margemSug=precoSugerido*(margin/100);
+    var impostoSug=precoSugerido*(tax/100);
+    var margemPctSug=margin;
+
+    h+='<div style="background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:var(--rl);padding:16px;margin-bottom:12px">';
+    // Total a cobrir
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--blue-md)">';
+    h+='<div><div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:4px">Total Mensal a Cobrir</div>';
+    h+='<div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--blue)">'+R$(baseTotal)+'</div>';
+    h+='<div style="font-size:10px;color:var(--blue);opacity:.7;margin-top:2px">Custo operação + fundo de reserva</div></div>';
+    h+='<div style="text-align:right"><div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:4px">Custo por Cliente</div>';
+    h+='<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--blue)">'+R$(custoPorCliente)+'</div>';
+    h+='<div style="font-size:10px;color:var(--blue);opacity:.7;margin-top:2px">'+baseTotal.toFixed(2)+' ÷ '+atual+' clientes</div></div>';
+    h+='</div>';
+
+    // Preço sugerido
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">';
+    h+='<div style="text-align:center"><div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);opacity:.8;margin-bottom:4px">Preço Sugerido</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--blue)">'+R$(precoSugerido)+'</div><div style="font-size:9.5px;color:var(--blue);opacity:.6;margin-top:2px">por cliente</div></div>';
+    h+='<div style="text-align:center"><div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);opacity:.8;margin-bottom:4px">Imposto</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--blue)">'+R$(impostoSug)+'</div><div style="font-size:9.5px;color:var(--blue);opacity:.6;margin-top:2px">'+tax+'% por cliente</div></div>';
+    h+='<div style="text-align:center"><div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);opacity:.8;margin-bottom:4px">Margem R$</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--blue)">'+R$(margemSug)+'</div><div style="font-size:9.5px;color:var(--blue);opacity:.6;margin-top:2px">'+margin+'% por cliente</div></div>';
+    h+='<div style="text-align:center"><div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);opacity:.8;margin-bottom:4px">Lucro %</div><div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--blue)">'+margemPctSug.toFixed(1)+'%</div><div style="font-size:9.5px;color:var(--blue);opacity:.6;margin-top:2px">sobre o preço</div></div>';
+    h+='</div>';
+    h+='</div>';
+  }
+
+  // ── SIMULADOR ─────────────────────────────────────────────────────
+  h+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-top:12px">';
+  h+='<div style="padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border)">';
+  h+='<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)">Simulador de Preço</div>';
+  h+='<div style="font-size:11px;color:var(--t4);margin-top:2px">Preço sugerido já garante '+margin+'% de margem. Simule outro preço e veja o retorno.</div>';
+  h+='</div>';
+  h+='<div style="padding:16px">';
+  // Exibir preço sugerido como referência + input do preço simulado
+  h+='<div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+  h+='<div style="display:flex;flex-direction:column;gap:4px">'+
+    '<label style="font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em">Preço sugerido ('+margin+'% margem)</label>'+
+    '<div style="padding:8px 14px;background:var(--blue-lt);border:2px solid var(--blue-md);border-radius:var(--r);font-family:var(--mono);font-size:18px;font-weight:700;color:var(--blue)">'+R$(precoSugerido)+'</div>'+
+  '</div>';
+  h+='<div style="padding-bottom:12px;font-size:22px;color:var(--t4)">→</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:4px">'+
+    '<label style="font-size:10px;font-weight:700;color:var(--co);text-transform:uppercase;letter-spacing:.07em">Seu preço</label>'+
+    '<input type="text" id="sim_pr_'+svc.id+'" value="'+(svc.precoAlvo?'R$ '+parseValorBRL(svc.precoAlvo).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):'')+'" placeholder="R$ 0,00" '+
+      'data-sid="'+svc.id+'" data-par="precoAlvo" '+
+      'data-sug="'+precoSugerido.toFixed(2)+'" data-mg="'+margin+'" data-tx="'+tax+'" '+
+      'style="width:170px;padding:8px 14px;border:2px solid var(--co);border-radius:var(--r);font-family:var(--mono);font-size:18px;font-weight:700;color:var(--co);text-align:right;outline:none" '+
+      'oninput="maskBRL(this);simPricEl(this)" onblur="blurBRL(this);updateSvcParamEl(this)">'+
+  '</div>';
+  h+='</div>';
+  h+='<div id="sim_res_'+svc.id+'"></div>';
+  h+='</div></div>';
+  if(svc.precoAlvo&&precoSugerido>0){
+    h+='<script>setTimeout(function(){var el=document.getElementById("sim_pr_'+svc.id+'");if(el)simPricEl(el);},150);</'+'script>';
+  }
+
+  return h;
 }
 
+
+function refreshSvcDetail(svc){
+  var detEl=document.getElementById('pd-'+svc.id);
+  if(detEl&&detEl.style.display!=='none'){
+    var cost=calcSvcCost(svc);
+    var price=calcSvcPrice(svc);
+    detEl.innerHTML=buildSvcDetail(svc,cost,price);
+  }
+}
+
+// Chamado por campos com data-sid e data-par (sem fechar o painel)
 function updateSvcParamEl(el){
-  updateSvcParam(el.dataset.sid, el.dataset.par, el.value);
-}
-
-function updateItemDivisor(el){
-  const sid=el.dataset.sid;
-  const idx=parseInt(el.dataset.idx);
-  const val=parseInt(el.value)||1;
-  const svc=getSvcs().find(function(s){return s.id===sid;});
-  if(!svc||!svc.items[idx]) return;
-  svc.items[idx].customDivisor=val;
+  var id=el.dataset.sid;
+  var key=el.dataset.par;
+  if(!id||!key) return;
+  var svc=getSvcs().find(function(s){return s.id===id;});
+  if(!svc) return;
+  var strKeys=['fundoVal','metaVal','precoAlvo'];
+  svc[key]=strKeys.indexOf(key)>=0?String(el.value):(isNaN(+el.value)?el.value:+el.value);
   saveLocalCache();
   queueWrite('services',[svcToRow(svc)]);
-  // Re-renderizar só o detalhe desse serviço para atualizar o valor calculado
-  const cost=calcSvcCost(svc);
-  const price=calcSvcPrice(svc);
-  const detEl=document.getElementById('pd-'+sid);
-  if(detEl) detEl.innerHTML=buildSvcDetail(svc,cost,price);
+  refreshSvcDetail(svc);
 }
 
 async function updateSvcParam(id,key,val){
-  const svc=getSvcs().find(s=>s.id===id);
+  const svc=getSvcs().find(function(s){return s.id===id;});
   if(!svc)return;
-  // Campos de valor (string R$) salvam como string; outros como número
-  var strKeys=['fundoVal','metaVal'];
+  var strKeys=['fundoVal','metaVal','precoAlvo','simClientes'];
   svc[key]=strKeys.indexOf(key)>=0?String(val):+val;
   saveLocalCache();
   queueWrite('services',[svcToRow(svc)]);
-  renderPricing();
+  refreshSvcDetail(svc);
 }
 
 // Modal Serviço
@@ -2981,6 +2928,7 @@ function svcToRow(svc){
     fundoDiv: svc.fundoDiv||1,
     metaVal : svc.metaVal||'',
     metaDiv : svc.metaDiv||1,
+    precoAlvo: svc.precoAlvo||'',
     items   : JSON.stringify(svc.items||[]),
     ts      : svc.ts||Date.now(),
   };
@@ -3382,6 +3330,11 @@ function saveCfg(){
 }
 
 function renderSettings(){
+  // Preencher campos de senha (mostrar placeholder se definida)
+  var pwdFin=document.getElementById('cfgPwdFin');
+  var pwdVis=document.getElementById('cfgPwdVis');
+  if(pwdFin) pwdFin.placeholder=CACHE.settings['__pwd_financeiro__']?'••••••••':'Senha de acesso total';
+  if(pwdVis) pwdVis.placeholder=CACHE.settings['__pwd_visualizador__']?'••••••••':'Senha somente leitura';
   // Preencher campos
   const get=k=>CACHE.settings['__'+k+'__']||'';
   const setV=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
@@ -3877,6 +3830,8 @@ function renderCashflow(){
   var ano=document.getElementById('cfAno');
   var qtdEl=document.getElementById('cfQtd');
   if(!ano||!qtdEl) return;
+  // Garantir que o select de ano está populado antes de renderizar
+  if(!ano.options.length) initCashflowAno();
   var anoVal=parseInt(ano.value)||new Date().getFullYear();
   var q=parseInt(qtdEl.value)||6;
 
@@ -4029,13 +3984,450 @@ function initCashflowAno(){
   if(!sel) return;
   var cur=new Date().getFullYear();
   sel.innerHTML='';
-  for(var y=cur;y>=cur-2;y--){
+  for(var y=cur+1;y>=cur-4;y--){
     var o=document.createElement('option');
     o.value=y; o.textContent=y;
+    if(y===cur) o.selected=true;
     sel.appendChild(o);
   }
 }
 // ── FIM FLUXO DE CAIXA ───────────────────────────────────────────────
+
+
+// ── FLUXO DE CAIXA CERBERUS — saldo inicial e final editáveis ──────
+var _cfSaldos = {};
+
+function cfGetSaldo(ym, tipo){
+  var k='__cfsaldo_'+ym+'_'+tipo+'__';
+  var v=CACHE.settings[k];
+  return v!==undefined&&v!==''?parseFloat(fixValueStr(v)):null;
+}
+function cfSetSaldo(ym, tipo, val){
+  var k='__cfsaldo_'+ym+'_'+tipo+'__';
+  CACHE.settings[k]=String(val);
+  saveLocalCache();
+  queueWrite('settings',[{key:k,value:String(val)}]);
+}
+function cfSaveSaldoInput(el){
+  var ym=el.dataset.ym;
+  var tipo=el.dataset.tipo;
+  var val=parseFloat(fixValueStr(el.value))||0;
+  cfSetSaldo(ym,tipo,val);
+  el.value=val.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  renderCashflowCerberus();
+}
+function cfInputKeydown(el,e){
+  if(e.keyCode===13||e.which===13) el.blur();
+}
+
+function cfSaldoCell(v, ym, tipo, isSF){
+  var clr=isSF?'#fff':'#1D4ED8';
+  var bdr=isSF?'rgba(255,255,255,.4)':'#93C5FD';
+  var bg=isSF?'background:var(--co);':'';
+  var valStr=v?v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+  return '<td class="td-sep" style="padding:4px 10px;'+bg+'">'+
+    '<input class="cf-edit-inp" type="text"'+
+    ' data-ym="'+ym+'" data-tipo="'+tipo+'"'+
+    ' value="'+valStr+'"'+
+    ' placeholder="0,00"'+
+    ' style="color:'+clr+';border-bottom-color:'+bdr+';font-weight:'+(isSF?700:600)+'"'+
+    ' onblur="cfSaveSaldoInput(this)"'+
+    ' onkeydown="cfInputKeydown(this,event)"'+
+    '>'+
+  '</td>';
+}
+
+function renderCashflowCerberus(){
+  if(!CACHE._loaded) return;
+  var ano=document.getElementById('cfAno');
+  var qtdEl=document.getElementById('cfQtd');
+  if(!ano||!qtdEl) return;
+  if(!ano.options.length) initCashflowAno();
+  var anoVal=parseInt(ano.value)||new Date().getFullYear();
+  var q=parseInt(qtdEl.value)||6;
+  document.getElementById('cfSub').textContent=anoVal;
+
+  var MES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var meses=[]; for(var m=0;m<12;m++) meses.push(String(anoVal)+'-'+String(m+1).padStart(2,'0'));
+
+  var rec=[],cva=[],dfi=[],ret=[];
+  meses.forEach(function(ym){
+    var rv=getRvs(ym); var ex=getExs(ym);
+    rec.push(rv.reduce(function(s,r){return s+(+r.value||0);},0));
+    cva.push(ex.filter(function(e){return e.classification==='variable';}).reduce(function(s,e){return s+(+e.value||0);},0));
+    dfi.push(ex.filter(function(e){return e.classification==='fixed';}).reduce(function(s,e){return s+(+e.value||0);},0));
+    ret.push(ex.filter(function(e){return e.classification==='profit';}).reduce(function(s,e){return s+(+e.value||0);},0));
+  });
+
+  var idx=[]; for(var j=0;j<q;j++) idx.push(j);
+  var recQ=idx.map(function(i){return rec[i];});
+  var cvaQ=idx.map(function(i){return cva[i];});
+  var dfiQ=idx.map(function(i){return dfi[i];});
+  var invQ=idx.map(function(){return 0;});
+  var retQ=idx.map(function(i){return ret[i];});
+  var lb=idx.map(function(i){return recQ[i]-cvaQ[i];});
+  var lo=idx.map(function(i){return lb[i]-dfiQ[i];});
+  var ll=idx.map(function(i){return lo[i]-invQ[i];});
+  var gc=idx.map(function(i){return ll[i]-retQ[i];});
+  var siQ=idx.map(function(i){ var v=cfGetSaldo(meses[i],'si'); return v!==null?v:0; });
+  var sfQ=idx.map(function(i){ var v=cfGetSaldo(meses[i],'sf'); return v!==null?v:0; });
+
+  var showCols=1+q*(1+(_cfAV?1:0)+(_cfAH?1:0));
+
+  var h='<thead>';
+  h+='<tr><th rowspan="2" style="text-align:left;min-width:160px;vertical-align:bottom;border-right:1px solid var(--b2)">Indicador</th>';
+  idx.forEach(function(i){
+    var span=1+(_cfAV?1:0)+(_cfAH?1:0);
+    h+='<th colspan="'+span+'" style="text-align:center;border-left:2px solid var(--border);font-size:10.5px;font-weight:700;color:var(--t2);letter-spacing:.04em;text-transform:none;padding:8px 10px">'+MES[i]+'</th>';
+  });
+  h+='</tr><tr>';
+  idx.forEach(function(){
+    h+='<th class="th-val th-sep">Valor</th>';
+    if(_cfAV) h+='<th class="th-pct">AV%</th>';
+    if(_cfAH) h+='<th class="th-pct">AH%</th>';
+  });
+  h+='</tr></thead><tbody>';
+
+  // Saldo inicial editável
+  h+='<tr class="cf-si"><td>Saldo inicial</td>';
+  idx.forEach(function(i){
+    h+=cfSaldoCell(siQ[i],meses[i],'si',false);
+    if(_cfAV) h+='<td class="td-pct">—</td>';
+    if(_cfAH){
+      var ah=i>0&&siQ[i-1]?cfAH(siQ[i],siQ[i-1]):null;
+      h+='<td class="td-pct">'+(ah!==null?'<span class="'+(ah>=0?'cf-ahp':'cf-ahn')+'">'+(ah>=0?'+':'')+ah.toFixed(1)+'%</span>':'—')+'</td>';
+    }
+  });
+  h+='</tr>';
+
+  h+='<tr class="cf-sec"><td colspan="'+showCols+'">Entradas</td></tr>';
+  h+=cfRowSh('Receitas brutas', recQ, null, 'cf-rec');
+  h+='<tr class="cf-sec"><td colspan="'+showCols+'">Saídas operacionais</td></tr>';
+  h+=cfRowSh('Custos variáveis', cvaQ, recQ, 'cf-exp');
+  h+='<tr class="cf-tot"><td>Lucro bruto</td>';
+  lb.forEach(function(v,i){ h+=cfCells(lb,i,recQ[i],i>0?lb[i-1]:null); });
+  h+='</tr>';
+  h+=cfRowSh('Despesas fixas', dfiQ, recQ, 'cf-exp');
+  h+='<tr class="cf-res cf-res-op"><td>Lucro operacional</td>';
+  lo.forEach(function(v,i){ h+=cfCells(lo,i,recQ[i],i>0?lo[i-1]:null); });
+  h+='</tr>';
+  h+=cfRowSh('Investimentos', invQ, recQ, 'cf-exp');
+  h+='<tr class="cf-res cf-res-op"><td>Lucro líquido</td>';
+  ll.forEach(function(v,i){ h+=cfCells(ll,i,recQ[i],i>0?ll[i-1]:null); });
+  h+='</tr>';
+  h+='<tr class="cf-sec"><td colspan="'+showCols+'">Retiradas</td></tr>';
+  h+=cfRowSh('Retiradas de lucro', retQ, recQ, 'cf-exp');
+  h+='<tr class="cf-tot"><td>Geração de caixa</td>';
+  gc.forEach(function(v,i){ h+=cfCells(gc,i,recQ[i],i>0?gc[i-1]:null); });
+  h+='</tr>';
+
+  // Saldo final editável
+  h+='<tr class="cf-sf"><td>Saldo final</td>';
+  idx.forEach(function(i){
+    h+=cfSaldoCell(sfQ[i],meses[i],'sf',true);
+    if(_cfAV) h+='<td class="td-pct" style="background:var(--co)">—</td>';
+    if(_cfAH){
+      var ah=i>0&&sfQ[i-1]?cfAH(sfQ[i],sfQ[i-1]):null;
+      h+='<td class="td-pct" style="background:var(--co)">'+(ah!==null?'<span class="'+(ah>=0?'cf-ahp':'cf-ahn')+'">'+(ah>=0?'+':'')+ah.toFixed(1)+'%</span>':'—')+'</td>';
+    }
+  });
+  h+='</tr>';
+
+  h+='</tbody>';
+  document.getElementById('cfTable').innerHTML=h;
+}
+// ── FIM CASHFLOW CERBERUS ──────────────────────────────────────────
+
+
+
+
+// ── SIMULADOR DE PRECIFICAÇÃO ─────────────────────────────────────────
+function runSim(svcId){
+  var svc=getSvcs().find(function(s){return s.id===svcId;});
+  if(!svc) return;
+  var precoEl=document.getElementById('simPreco_'+svcId);
+  var clientesEl=document.getElementById('simClientes_'+svcId);
+  var resultEl=document.getElementById('simResult_'+svcId);
+  if(!precoEl||!clientesEl||!resultEl) return;
+
+  var preco=parseValorBRL(precoEl.value)||0;
+  var clientes=parseInt(clientesEl.value)||0;
+  if(preco<=0||clientes<=0){
+    resultEl.innerHTML='';
+    return;
+  }
+
+  var fundoVal=parseValorBRL(svc.fundoVal||0);
+  var fundoDiv=+svc.fundoDiv||1;
+  var fundoParc=fundoVal>0?fundoVal/fundoDiv:0;
+  var custoBase=calcSvcCost(svc)-fundoParc;
+  var totalBase=custoBase+fundoParc;
+  var margin=+svc.margin||0;
+  var tax=+svc.tax||0;
+
+  var receitaBruta=preco*clientes;
+  var impostoVal=receitaBruta*(tax/100);
+  var receitaLiq=receitaBruta-impostoVal;
+  var margemVal=receitaBruta*(margin/100);
+  var resultado=receitaLiq-totalBase-margemVal;
+  var margemReal=receitaBruta>0?((receitaLiq-totalBase)/receitaBruta)*100:0;
+  var breakeven=preco*(1-tax/100-margin/100)>0?Math.ceil(totalBase/(preco*(1-tax/100-margin/100))):0;
+
+  var cor=resultado>=0?'var(--green)':'var(--red)';
+  var icone=resultado>=0?'✅':'⚠';
+
+  resultEl.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">'+
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:2px">Receita Bruta</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t1)">'+R$(receitaBruta)+'</div>'+
+      '</div>'+
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:2px">Imposto ('+tax+'%)</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">- '+R$(impostoVal)+'</div>'+
+      '</div>'+
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:2px">Custo Total</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">- '+R$(totalBase)+'</div>'+
+      '</div>'+
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:2px">Margem Real</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t1)">'+margemReal.toFixed(1)+'%</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="background:var(--surface);border:2px solid '+cor+';border-radius:var(--r);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'+
+      '<span style="font-size:12px;font-weight:600;color:var(--t1)">'+icone+' Resultado</span>'+
+      '<span style="font-family:var(--mono);font-size:16px;font-weight:700;color:'+cor+'">'+R$(resultado)+'</span>'+
+    '</div>'+
+    '<div style="margin-top:6px;font-size:10.5px;color:var(--t4);text-align:center">'+
+      'Ponto de equilíbrio: <strong style="color:var(--t2)">'+breakeven+' clientes</strong> a este preço'+
+    '</div>';
+}
+// ── FIM SIMULADOR ─────────────────────────────────────────────────────
+
+
+// ── SIMULADOR DE RESULTADO ────────────────────────────────────────────
+function calcPrecoAlvoEl(el){
+  var svcId=el.dataset.sid;
+  var svc=getSvcs().find(function(s){return s.id===svcId;});
+  if(!svc) return;
+  svc.precoAlvo=el.value;
+  saveLocalCache();
+  var detEl=document.getElementById('pd-'+svcId);
+  if(detEl&&detEl.style.display!=='none'){
+    var cost=calcSvcCost(svc);
+    var price=calcSvcPrice(svc);
+    detEl.innerHTML=buildSvcDetail(svc,cost,price);
+  }
+}
+
+function calcPrecoAlvo(svcId, baseTotal, margin, tax){
+  var el=document.getElementById('precoAlvo_'+svcId);
+  if(el) calcPrecoAlvoEl(el);
+}
+
+function simPricEl(el){
+  var prEl=document.getElementById('sim_pr_'+el.dataset.sid)||el;
+  var resEl=document.getElementById('sim_res_'+el.dataset.sid);
+  if(!resEl) return;
+
+  var precoSim=parseValorBRL(prEl.value)||0;
+  var precoSug=parseFloat(prEl.dataset.sug)||0;
+  var mg=parseFloat(prEl.dataset.mg)||0;   // margem % do preço sugerido
+  var tx=parseFloat(prEl.dataset.tx)||0;   // imposto %
+
+  if(!precoSim||!precoSug){ resEl.innerHTML=''; return; }
+
+  // ── Lógica pura: proporcional ao preço sugerido ─────────────────
+  // Preço sugerido já garante mg% de margem após imposto
+  // Margem em R$ no preço sugerido = precoSug × mg/100
+  var margemSugR=precoSug*(mg/100);
+  var impostoSugR=precoSug*(tx/100);
+  var custoSugR=precoSug-margemSugR-impostoSugR;  // custo unitário embutido
+
+  // Com o preço simulado, o custo unitário é o MESMO — ele não muda
+  // O que muda é a receita, o imposto (proporcional) e o lucro
+  var impostoSimR=precoSim*(tx/100);
+  var lucroSimR=precoSim-impostoSimR-custoSugR;
+  var margemSimPct=precoSim>0?(lucroSimR/precoSim*100):0;
+
+  // Ganho extra vs preço sugerido
+  var ganhoExtra=lucroSimR-margemSugR;
+  var ganhoExtraPct=precoSim>0?(ganhoExtra/precoSim*100):0;
+
+  var positivo=lucroSimR>=0;
+  var cor=positivo?'var(--green)':'var(--red)';
+  var acima=precoSim>precoSug;
+
+  resEl.innerHTML=
+    // Comparação visual
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+      // Preço sugerido
+      '<div style="padding:14px;background:var(--blue-lt);border:1px solid var(--blue-md);border-radius:var(--r)">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Preço Sugerido</div>'+
+        '<div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--blue)">'+R$(precoSug)+'</div>'+
+        '<div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">'+
+          '<div style="text-align:center;background:#ffffff55;border-radius:4px;padding:4px">'+
+            '<div style="font-size:8.5px;color:var(--blue);opacity:.8">Custo</div>'+
+            '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue)">'+R$(custoSugR)+'</div>'+
+          '</div>'+
+          '<div style="text-align:center;background:#ffffff55;border-radius:4px;padding:4px">'+
+            '<div style="font-size:8.5px;color:var(--blue);opacity:.8">Imposto</div>'+
+            '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue)">'+R$(impostoSugR)+'</div>'+
+          '</div>'+
+          '<div style="text-align:center;background:#ffffff55;border-radius:4px;padding:4px">'+
+            '<div style="font-size:8.5px;color:var(--blue);opacity:.8">Margem</div>'+
+            '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--blue)">'+R$(margemSugR)+' ('+mg+'%)</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      // Preço simulado
+      '<div style="padding:14px;background:'+(positivo?'var(--green-lt)':'#FEF2F2')+';border:1px solid '+(positivo?'var(--green-md)':'#FECACA')+';border-radius:var(--r)">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:'+cor+';margin-bottom:6px">Seu Preço</div>'+
+        '<div style="font-family:var(--mono);font-size:20px;font-weight:700;color:'+cor+'">'+R$(precoSim)+'</div>'+
+        '<div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">'+
+          '<div style="text-align:center;background:#ffffff55;border-radius:4px;padding:4px">'+
+            '<div style="font-size:8.5px;color:'+cor+';opacity:.8">Custo</div>'+
+            '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:'+cor+'">'+R$(custoSugR)+'</div>'+
+          '</div>'+
+          '<div style="text-align:center;background:#ffffff55;border-radius:4px;padding:4px">'+
+            '<div style="font-size:8.5px;color:'+cor+';opacity:.8">Imposto</div>'+
+            '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:'+cor+'">'+R$(impostoSimR)+'</div>'+
+          '</div>'+
+          '<div style="text-align:center;background:#ffffff55;border-radius:4px;padding:4px">'+
+            '<div style="font-size:8.5px;color:'+cor+';opacity:.8">Margem</div>'+
+            '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:'+cor+'">'+R$(lucroSimR)+' ('+margemSimPct.toFixed(1)+'%)</div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+    // Ganho extra
+    '<div style="padding:14px;background:'+(acima?'var(--green-lt)':'#FEF9EC')+';border:1px solid '+(acima?'var(--green-md)':'#FDE68A')+';border-radius:var(--r)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
+        '<div>'+
+          '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:'+(acima?'var(--green)':'#92400E');+'margin-bottom:4px">'+
+            (acima?'✓ Lucro extra por cobrar mais caro':'⚠ Cobrando abaixo do sugerido')+
+          '</div>'+
+          '<div style="font-size:12px;color:'+(acima?'var(--green)':'#92400E')+'">'+
+            'Cobrando '+R$(precoSim)+' ao invés de '+R$(precoSug)+' você tem '+
+            '<strong>'+(ganhoExtra>=0?'+ ':'')+R$(ganhoExtra)+'</strong> de lucro extra por cliente'+
+          '</div>'+
+        '</div>'+
+        '<div style="text-align:right">'+
+          '<div style="font-family:var(--mono);font-size:26px;font-weight:700;color:'+(acima?'var(--green)':'#92400E')+'">'+(ganhoExtra>=0?'+':'')+R$(ganhoExtra)+'</div>'+
+          '<div style="font-size:11px;color:'+(acima?'var(--green)':'#92400E')+'">'+margemSimPct.toFixed(1)+'% de margem</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+}
+
+
+function _simCard(lbl, val, pct, cor){
+  return '<div style="background:var(--s2);border-radius:var(--r);padding:10px;text-align:center;border:1px solid var(--border)">'+
+    '<div style="font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">'+lbl+'</div>'+
+    '<div style="font-family:var(--mono);font-size:13px;font-weight:700;color:'+cor+'">'+val+'</div>'+
+    (pct?'<div style="font-size:10px;color:'+cor+';opacity:.7;margin-top:2px">'+pct+'</div>':'')+'</div>';
+}
+
+function simResultEl2(el){
+  var sid=el.dataset.sid;
+  var base=parseFloat(el.dataset.base)||0;
+  var mg=parseFloat(el.dataset.mg)||0;
+  var tx=parseFloat(el.dataset.tx)||0;
+  var preco=parseValorBRL(el.dataset.preco)||0;
+  var clientes=parseInt(el.value)||0;
+  var resEl=document.getElementById('sim2_res_'+sid);
+  if(!resEl||!preco||!clientes) return;
+  var fator=1-(mg/100)-(tx/100);
+  var receita=clientes*preco;
+  var resultado=receita*fator-base;
+  var ptEq=fator>0?Math.ceil(base/(preco*fator)):0;
+  var cor=resultado>=0?'var(--green)':'var(--red)';
+  resEl.innerHTML='<span style="color:'+cor+';font-weight:700">'+(resultado>=0?'+':'')+R$(resultado)+'</span>'+
+    '<span style="font-size:10px;color:var(--t4);margin-left:8px">(equilíbrio: '+ptEq+' clientes)</span>';
+  resEl.style.color=cor;
+}
+
+function simResultEl(el){
+  var sid=el.dataset.sid;
+  var base=parseFloat(el.dataset.base)||0;
+  var mg=parseFloat(el.dataset.mg)||0;
+  var tx=parseFloat(el.dataset.tx)||0;
+  simResult(sid,base,mg,tx);
+}
+
+function simResult(svcId, baseTotal, margin, tax){
+  var clEl=document.getElementById('sim_cl_'+svcId);
+  var prEl=document.getElementById('sim_pr_'+svcId);
+  var resEl=document.getElementById('sim_res_'+svcId);
+  if(!clEl||!prEl||!resEl) return;
+
+  var clientes=parseInt(clEl.value)||0;
+  var preco=parseValorBRL(prEl.value)||0;
+  if(clientes<=0||preco<=0){ resEl.innerHTML=''; return; }
+
+  var receita=clientes*preco;
+  var impostoR=receita*(tax/100);
+  var margemR=receita*(margin/100);
+  var receitaLiq=receita-impostoR;
+  var resultado=receitaLiq-baseTotal;
+  var margemReal=receita>0?(resultado/receita*100):0;
+  var positivo=resultado>=0;
+  var cor=positivo?'var(--green)':'var(--red)';
+  var fator=1-(margin/100)-(tax/100);
+  var precoMinimo=fator>0?baseTotal/clientes/fator:0;
+
+  resEl.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+
+      '<div style="background:var(--s2);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:3px">Receita Bruta</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t1)">'+R$(receita)+'</div>'+
+      '</div>'+
+      '<div style="background:var(--s2);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:3px">Imposto ('+tax+'%)</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--red)">- '+R$(impostoR)+'</div>'+
+      '</div>'+
+      '<div style="background:var(--s2);border-radius:var(--r);padding:8px 10px;text-align:center">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:3px">Margem ('+margin+'%)</div>'+
+        '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)">'+R$(margemR)+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+      '<div style="background:'+(positivo?'var(--green-lt)':'var(--red-lt)')+';border:1px solid '+(positivo?'var(--green-md)':'var(--red-md)')+';border-radius:var(--r);padding:10px 12px">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:'+cor+';margin-bottom:4px">'+(positivo?'✓ Resultado Positivo':'✗ Resultado Negativo')+'</div>'+
+        '<div style="font-family:var(--mono);font-size:16px;font-weight:700;color:'+cor+'">'+R$(resultado)+'</div>'+
+        '<div style="font-size:10px;color:'+cor+';margin-top:3px">Margem real: '+margemReal.toFixed(1)+'%</div>'+
+      '</div>'+
+      '<div style="background:var(--s2);border-radius:var(--r);padding:10px 12px">'+
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:4px">Preço Mínimo</div>'+
+        '<div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--t1)">'+R$(precoMinimo)+'</div>'+
+        '<div style="font-size:10px;color:var(--t4);margin-top:3px">para cobrir a operação</div>'+
+      '</div>'+
+    '</div>'+
+    (resultado<0?'<div style="margin-top:8px;padding:8px 10px;background:var(--red-lt);border-radius:var(--r);font-size:11px;color:var(--red)">⚠ Prejuízo de '+R$(Math.abs(resultado))+'. Aumente o preço para no mínimo '+R$(precoMinimo)+' por cliente.</div>':'');
+}
+// ── FIM SIMULADOR ─────────────────────────────────────────────────────
+
+
+// ── MÁSCARA MONETÁRIA ─────────────────────────────────────────────────
+function maskBRL(el){
+  // Remove tudo que não é dígito
+  var raw=el.value.replace(/\D/g,'');
+  if(!raw){ el.value=''; return; }
+  // Converte para centavos e formata
+  var cents=parseInt(raw,10);
+  var reais=cents/100;
+  el.value='R$ '+reais.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function blurBRL(el){
+  var v=parseValorBRL(el.value);
+  if(v>0){
+    el.value='R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  } else {
+    el.value='';
+  }
+}
+// ── FIM MÁSCARA ────────────────────────────────────────────────────────
 
 // ── ARRANQUE ──────────────────────────────────────────────────────
 init();
