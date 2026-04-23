@@ -444,9 +444,9 @@ body.pres #app{margin-top:34px}
   .ma-resultado-desc{font-size:10.5px;color:var(--t4);margin-top:4px}
 
   /* Gráfico */
-  .ma-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:20px 24px 20px;margin-bottom:14px;box-shadow:var(--sh)}
-  .ma-chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
-  .ma-chart-title{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--t3)}
+  .ma-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:22px 28px 22px;margin-bottom:14px;box-shadow:var(--sh)}
+  .ma-chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .ma-chart-title{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--t2)}
   .ma-legenda{display:flex;gap:14px;flex-wrap:wrap}
   .ma-leg-item{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--t2);cursor:pointer;user-select:none;transition:opacity .2s}
   .ma-leg-item:hover{opacity:.72}
@@ -1055,41 +1055,42 @@ body.pres #app{margin-top:34px}
           </div>
         </div>
 
-        <!-- Gráficos: 2 cards separados lado a lado -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-
-          <!-- Gráfico 1: Realizado (Recebido e Pago) -->
-          <div class="ma-chart-card" style="margin-bottom:0">
-            <div class="ma-chart-header">
+        <!-- Gráfico 1: Realizado — linha inteira -->
+        <div class="ma-chart-card">
+          <div class="ma-chart-header">
+            <div style="display:flex;flex-direction:column;gap:2px">
               <div class="ma-chart-title">REALIZADO</div>
-              <div class="ma-legenda">
-                <span class="ma-leg-item" data-chart="real" data-ds="0" onclick="maToggleDSReal(0)">
-                  <span class="ma-leg-dot" style="background:#16A34A"></span>Recebido
-                </span>
-                <span class="ma-leg-item" data-chart="real" data-ds="1" onclick="maToggleDSReal(1)">
-                  <span class="ma-leg-dot" style="background:#F87171"></span>Pago
-                </span>
-              </div>
+              <div style="font-size:10.5px;color:var(--t4)">Entradas e saídas confirmadas no mês</div>
             </div>
-            <div style="height:240px;position:relative"><canvas id="ma-chart-real"></canvas></div>
+            <div class="ma-legenda">
+              <span class="ma-leg-item" data-chart="real" data-ds="0" onclick="maToggleDSReal(0)">
+                <span class="ma-leg-dot" style="background:#16A34A"></span>Recebido
+              </span>
+              <span class="ma-leg-item" data-chart="real" data-ds="1" onclick="maToggleDSReal(1)">
+                <span class="ma-leg-dot" style="background:#F87171"></span>Pago
+              </span>
+            </div>
           </div>
+          <div style="height:260px;position:relative"><canvas id="ma-chart-real"></canvas></div>
+        </div>
 
-          <!-- Gráfico 2: Previsto (A Receber e A Pagar) -->
-          <div class="ma-chart-card" style="margin-bottom:0">
-            <div class="ma-chart-header">
+        <!-- Gráfico 2: Previsto — linha inteira -->
+        <div class="ma-chart-card">
+          <div class="ma-chart-header">
+            <div style="display:flex;flex-direction:column;gap:2px">
               <div class="ma-chart-title">PREVISTO</div>
-              <div class="ma-legenda">
-                <span class="ma-leg-item" data-chart="prev" data-ds="0" onclick="maToggleDSPrev(0)">
-                  <span class="ma-leg-dot" style="background:#2563EB"></span>A Receber
-                </span>
-                <span class="ma-leg-item" data-chart="prev" data-ds="1" onclick="maToggleDSPrev(1)">
-                  <span class="ma-leg-dot" style="background:#F59E0B"></span>A Pagar
-                </span>
-              </div>
+              <div style="font-size:10.5px;color:var(--t4)">Valores futuros a receber e a pagar</div>
             </div>
-            <div style="height:240px;position:relative"><canvas id="ma-chart-prev"></canvas></div>
+            <div class="ma-legenda">
+              <span class="ma-leg-item" data-chart="prev" data-ds="0" onclick="maToggleDSPrev(0)">
+                <span class="ma-leg-dot" style="background:#2563EB"></span>A Receber
+              </span>
+              <span class="ma-leg-item" data-chart="prev" data-ds="1" onclick="maToggleDSPrev(1)">
+                <span class="ma-leg-dot" style="background:#F59E0B"></span>A Pagar
+              </span>
+            </div>
           </div>
-
+          <div style="height:260px;position:relative"><canvas id="ma-chart-prev"></canvas></div>
         </div>
 
       </div>
@@ -4821,88 +4822,146 @@ function renderMesAtual(){
   arec.forEach(function(r){var dt=maPDT(r.vencimento);if(dt&&dt.getMonth()===mes-1)arDia[dt.getDate()-1]+=maPV(r.valor);});
   pago.forEach(function(r){var dt=maPDT(r.quitacao);if(dt)pagDia[dt.getDate()-1]+=maPV(r.valor);});
   apag.forEach(function(r){var dt=maPDT(r.vencimento);if(dt&&dt.getMonth()===mes-1)apDia[dt.getDate()-1]+=maPV(r.valor);});
-  // Labels DD/MM
-  var labelsFmt=[]; for(var d=1;d<=diasNoMes;d++) labelsFmt.push(String(d).padStart(2,'0')+'/'+String(mes).padStart(2,'0'));
+  // Labels DD/MM — TODOS os dias, sem pular
+  var labelsFmt=[];
+  for(var d=1;d<=diasNoMes;d++) labelsFmt.push(String(d).padStart(2,'0')+'/'+String(mes).padStart(2,'0'));
 
-  // Opções comuns dos 2 gráficos
-  function maChartOpts(cor1, cor2, label1, label2, isRealizado){
+  // Calcular totais para exibir nos títulos
+  var totRecebido=recDia.reduce(function(s,v){return s+v;},0);
+  var totPago    =pagDia.reduce(function(s,v){return s+v;},0);
+  var totAReceber=arDia.reduce(function(s,v){return s+v;},0);
+  var totAPagar  =apDia.reduce(function(s,v){return s+v;},0);
+
+  // Opções comuns — tooltip rico, eixos limpos
+  function maTooltip(isRealizado){
     return {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{
-          mode:'index', intersect:false,
-          backgroundColor:'rgba(15,23,42,.95)',
-          titleColor:'#94A3B8', titleFont:{size:11,weight:'600'},
-          bodyColor:'#F8FAFC', bodyFont:{size:12,weight:'500'},
-          padding:12, cornerRadius:8,
-          borderColor:'rgba(148,163,184,.15)', borderWidth:1,
-          callbacks:{
-            title:function(items){ return items[0].label; },
-            label:function(item){
-              if(!item.raw||item.raw===0) return null;
-              var seta=item.datasetIndex===0?' ↑ ':' ↓ ';
-              return seta+item.dataset.label+': '+maR$(item.raw);
-            },
-            afterBody:function(items){
-              var v1=0,v2=0;
-              items.forEach(function(i){
-                if(i.datasetIndex===0) v1+=i.raw;
-                else v2+=i.raw;
-              });
-              if(!v1&&!v2) return [];
-              var saldo=isRealizado?v1-v2:v1-v2;
-              return ['───────────────','Saldo: '+maR$(saldo)];
-            }
-          }
-        }
-      },
-      scales:{
-        x:{
-          grid:{display:false},
-          border:{display:false},
-          ticks:{font:{size:9,weight:'500'},color:'#94A3B8',maxRotation:0,autoSkip:true,maxTicksLimit:15}
+      mode:'index', intersect:false,
+      backgroundColor:'rgba(15,23,42,.96)',
+      titleColor:'#CBD5E1', titleFont:{size:11,weight:'700'},
+      bodyColor:'#F1F5F9', bodyFont:{size:12,weight:'500'},
+      padding:14, cornerRadius:10,
+      borderColor:'rgba(148,163,184,.12)', borderWidth:1,
+      callbacks:{
+        title:function(items){ return items[0].label; },
+        label:function(item){
+          if(!item.raw||item.raw===0) return null;
+          var ico=item.datasetIndex===0?(isRealizado?' ↑ ':' ↑ '):(isRealizado?' ↓ ':' ↓ ');
+          return ico+item.dataset.label+':  '+maR$(item.raw);
         },
-        y:{
-          grid:{color:'rgba(226,232,240,.5)',drawTicks:false},
-          border:{display:false},
-          ticks:{font:{size:9},color:'#94A3B8',padding:4,
-            callback:function(v){
-              if(v===0) return '0';
-              return v>=1000?(v/1000).toFixed(v%1000===0?0:1)+'k':v;
-            }
-          }
+        afterBody:function(items){
+          var v1=0,v2=0;
+          items.forEach(function(i){if(i.datasetIndex===0)v1+=i.raw;else v2+=i.raw;});
+          if(!v1&&!v2) return [];
+          var saldo=v1-v2;
+          var cor=saldo>=0?'  +':'  ';
+          return ['','  Saldo do dia:'+cor+maR$(saldo)];
         }
-      },
-      interaction:{mode:'index',intersect:false}
+      }
     };
   }
 
-  // Gráfico 1 — REALIZADO (Recebido e Pago)
+  function maScales(){
+    return {
+      x:{
+        grid:{display:false},
+        border:{display:false},
+        ticks:{
+          font:{size:9,weight:'600'},
+          color:'#94A3B8',
+          maxRotation:0,
+          autoSkip:false,   // NUNCA pula dias
+          callback:function(val, idx){
+            // Mostrar só o número do dia para economizar espaço
+            var lbl=this.getLabelForValue(val);
+            return lbl ? lbl.split('/')[0] : '';
+          }
+        }
+      },
+      y:{
+        grid:{color:'rgba(226,232,240,.45)',drawTicks:false},
+        border:{display:false},
+        ticks:{
+          font:{size:9.5},color:'#94A3B8',padding:8,
+          callback:function(v){
+            if(v===0) return 'R$ 0';
+            return v>=1000?'R$ '+(v/1000).toFixed(v%1000===0?0:1)+'k':'R$ '+v;
+          }
+        }
+      }
+    };
+  }
+
+  // Gráfico 1 — REALIZADO
   var ctxReal=document.getElementById('ma-chart-real');
   if(ctxReal){
     if(MA.chartReal) MA.chartReal.destroy();
     MA.chartReal=new Chart(ctxReal.getContext('2d'),{
       type:'bar',
       data:{labels:labelsFmt,datasets:[
-        {label:'Recebido',data:recDia,backgroundColor:'#16A34A',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
-        {label:'Pago',    data:pagDia,backgroundColor:'#F87171',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
+        {
+          label:'Recebido',
+          data:recDia,
+          backgroundColor:'rgba(22,163,74,.85)',
+          hoverBackgroundColor:'#16A34A',
+          borderRadius:{topLeft:4,topRight:4},
+          borderSkipped:false,
+          barPercentage:.85,
+          categoryPercentage:.75,
+        },
+        {
+          label:'Pago',
+          data:pagDia,
+          backgroundColor:'rgba(248,113,113,.85)',
+          hoverBackgroundColor:'#EF4444',
+          borderRadius:{topLeft:4,topRight:4},
+          borderSkipped:false,
+          barPercentage:.85,
+          categoryPercentage:.75,
+        },
       ]},
-      options:maChartOpts('#16A34A','#F87171','Recebido','Pago',true)
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:maTooltip(true)},
+        scales:maScales(),
+        interaction:{mode:'index',intersect:false}
+      }
     });
   }
 
-  // Gráfico 2 — PREVISTO (A Receber e A Pagar)
+  // Gráfico 2 — PREVISTO
   var ctxPrev=document.getElementById('ma-chart-prev');
   if(ctxPrev){
     if(MA.chartPrev) MA.chartPrev.destroy();
     MA.chartPrev=new Chart(ctxPrev.getContext('2d'),{
       type:'bar',
       data:{labels:labelsFmt,datasets:[
-        {label:'A Receber',data:arDia, backgroundColor:'#2563EB',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
-        {label:'A Pagar',  data:apDia, backgroundColor:'#F59E0B',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
+        {
+          label:'A Receber',
+          data:arDia,
+          backgroundColor:'rgba(37,99,235,.80)',
+          hoverBackgroundColor:'#2563EB',
+          borderRadius:{topLeft:4,topRight:4},
+          borderSkipped:false,
+          barPercentage:.85,
+          categoryPercentage:.75,
+        },
+        {
+          label:'A Pagar',
+          data:apDia,
+          backgroundColor:'rgba(245,158,11,.80)',
+          hoverBackgroundColor:'#D97706',
+          borderRadius:{topLeft:4,topRight:4},
+          borderSkipped:false,
+          barPercentage:.85,
+          categoryPercentage:.75,
+        },
       ]},
-      options:maChartOpts('#2563EB','#F59E0B','A Receber','A Pagar',false)
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:maTooltip(false)},
+        scales:maScales(),
+        interaction:{mode:'index',intersect:false}
+      }
     });
   }
 }
