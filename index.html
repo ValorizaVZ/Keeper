@@ -1055,26 +1055,41 @@ body.pres #app{margin-top:34px}
           </div>
         </div>
 
-        <!-- Gráfico -->
-        <div class="ma-chart-card">
-          <div class="ma-chart-header">
-            <div class="ma-chart-title">FLUXO DIÁRIO</div>
-            <div class="ma-legenda" id="ma-legenda">
-              <span class="ma-leg-item" data-ds="0" onclick="maToggleDS(0)">
-                <span class="ma-leg-dot" style="background:#16A34A"></span>Entrada
-              </span>
-              <span class="ma-leg-item" data-ds="1" onclick="maToggleDS(1)">
-                <span class="ma-leg-dot" style="background:#6EE7B7"></span>Prev. Entrada
-              </span>
-              <span class="ma-leg-item" data-ds="2" onclick="maToggleDS(2)">
-                <span class="ma-leg-dot" style="background:#F87171"></span>Saída
-              </span>
-              <span class="ma-leg-item" data-ds="3" onclick="maToggleDS(3)">
-                <span class="ma-leg-dot" style="background:#FCA5A5"></span>Prev. Saída
-              </span>
+        <!-- Gráficos: 2 cards separados lado a lado -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+
+          <!-- Gráfico 1: Realizado (Recebido e Pago) -->
+          <div class="ma-chart-card" style="margin-bottom:0">
+            <div class="ma-chart-header">
+              <div class="ma-chart-title">REALIZADO</div>
+              <div class="ma-legenda">
+                <span class="ma-leg-item" data-chart="real" data-ds="0" onclick="maToggleDSReal(0)">
+                  <span class="ma-leg-dot" style="background:#16A34A"></span>Recebido
+                </span>
+                <span class="ma-leg-item" data-chart="real" data-ds="1" onclick="maToggleDSReal(1)">
+                  <span class="ma-leg-dot" style="background:#F87171"></span>Pago
+                </span>
+              </div>
             </div>
+            <div style="height:240px;position:relative"><canvas id="ma-chart-real"></canvas></div>
           </div>
-          <div style="height:280px;position:relative"><canvas id="ma-chart"></canvas></div>
+
+          <!-- Gráfico 2: Previsto (A Receber e A Pagar) -->
+          <div class="ma-chart-card" style="margin-bottom:0">
+            <div class="ma-chart-header">
+              <div class="ma-chart-title">PREVISTO</div>
+              <div class="ma-legenda">
+                <span class="ma-leg-item" data-chart="prev" data-ds="0" onclick="maToggleDSPrev(0)">
+                  <span class="ma-leg-dot" style="background:#2563EB"></span>A Receber
+                </span>
+                <span class="ma-leg-item" data-chart="prev" data-ds="1" onclick="maToggleDSPrev(1)">
+                  <span class="ma-leg-dot" style="background:#F59E0B"></span>A Pagar
+                </span>
+              </div>
+            </div>
+            <div style="height:240px;position:relative"><canvas id="ma-chart-prev"></canvas></div>
+          </div>
+
         </div>
 
       </div>
@@ -4731,7 +4746,7 @@ init();
 
 const MA = {
   received:[], receivables:[], paid:[], payables:[],
-  hist:{}, chart:null, _detalhe:null,
+  hist:{}, chart:null, chartReal:null, chartPrev:null, _detalhe:null,
 };
 
 function maR$(v){
@@ -4806,85 +4821,105 @@ function renderMesAtual(){
   arec.forEach(function(r){var dt=maPDT(r.vencimento);if(dt&&dt.getMonth()===mes-1)arDia[dt.getDate()-1]+=maPV(r.valor);});
   pago.forEach(function(r){var dt=maPDT(r.quitacao);if(dt)pagDia[dt.getDate()-1]+=maPV(r.valor);});
   apag.forEach(function(r){var dt=maPDT(r.vencimento);if(dt&&dt.getMonth()===mes-1)apDia[dt.getDate()-1]+=maPV(r.valor);});
-  var labels=[];for(var d=1;d<=diasNoMes;d++)labels.push(String(d).padStart(2,'0'));
-  var ctx=document.getElementById('ma-chart');
-  if(ctx){
-    if(MA.chart)MA.chart.destroy();
-    // Labels DD/MM
-    var labelsFmt=[]; for(var d=1;d<=diasNoMes;d++) labelsFmt.push(String(d).padStart(2,'0')+'/'+String(mes).padStart(2,'0'));
-    MA.chart=new Chart(ctx.getContext('2d'),{
+  // Labels DD/MM
+  var labelsFmt=[]; for(var d=1;d<=diasNoMes;d++) labelsFmt.push(String(d).padStart(2,'0')+'/'+String(mes).padStart(2,'0'));
+
+  // Opções comuns dos 2 gráficos
+  function maChartOpts(cor1, cor2, label1, label2, isRealizado){
+    return {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          mode:'index', intersect:false,
+          backgroundColor:'rgba(15,23,42,.95)',
+          titleColor:'#94A3B8', titleFont:{size:11,weight:'600'},
+          bodyColor:'#F8FAFC', bodyFont:{size:12,weight:'500'},
+          padding:12, cornerRadius:8,
+          borderColor:'rgba(148,163,184,.15)', borderWidth:1,
+          callbacks:{
+            title:function(items){ return items[0].label; },
+            label:function(item){
+              if(!item.raw||item.raw===0) return null;
+              var seta=item.datasetIndex===0?' ↑ ':' ↓ ';
+              return seta+item.dataset.label+': '+maR$(item.raw);
+            },
+            afterBody:function(items){
+              var v1=0,v2=0;
+              items.forEach(function(i){
+                if(i.datasetIndex===0) v1+=i.raw;
+                else v2+=i.raw;
+              });
+              if(!v1&&!v2) return [];
+              var saldo=isRealizado?v1-v2:v1-v2;
+              return ['───────────────','Saldo: '+maR$(saldo)];
+            }
+          }
+        }
+      },
+      scales:{
+        x:{
+          grid:{display:false},
+          border:{display:false},
+          ticks:{font:{size:9,weight:'500'},color:'#94A3B8',maxRotation:0,autoSkip:true,maxTicksLimit:15}
+        },
+        y:{
+          grid:{color:'rgba(226,232,240,.5)',drawTicks:false},
+          border:{display:false},
+          ticks:{font:{size:9},color:'#94A3B8',padding:4,
+            callback:function(v){
+              if(v===0) return '0';
+              return v>=1000?(v/1000).toFixed(v%1000===0?0:1)+'k':v;
+            }
+          }
+        }
+      },
+      interaction:{mode:'index',intersect:false}
+    };
+  }
+
+  // Gráfico 1 — REALIZADO (Recebido e Pago)
+  var ctxReal=document.getElementById('ma-chart-real');
+  if(ctxReal){
+    if(MA.chartReal) MA.chartReal.destroy();
+    MA.chartReal=new Chart(ctxReal.getContext('2d'),{
       type:'bar',
       data:{labels:labelsFmt,datasets:[
-        {label:'Entrada',         data:recDia, backgroundColor:'#16A34A', borderRadius:3, barThickness:10, order:1},
-        {label:'Prev. Entrada',   data:arDia,  backgroundColor:'#6EE7B7', borderRadius:3, barThickness:10, order:2},
-        {label:'Saída',           data:pagDia, backgroundColor:'#F87171', borderRadius:3, barThickness:10, order:3},
-        {label:'Prev. Saída',     data:apDia,  backgroundColor:'#FCA5A5', borderRadius:3, barThickness:10, order:4},
+        {label:'Recebido',data:recDia,backgroundColor:'#16A34A',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
+        {label:'Pago',    data:pagDia,backgroundColor:'#F87171',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
       ]},
-      options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{
-          legend:{display:false},
-          tooltip:{
-            mode:'index', intersect:false,
-            backgroundColor:'rgba(15,23,42,.95)',
-            titleColor:'#94A3B8', titleFont:{size:11, weight:'600'},
-            bodyColor:'#F8FAFC', bodyFont:{size:12, weight:'500'},
-            padding:12, cornerRadius:8,
-            borderColor:'rgba(148,163,184,.15)', borderWidth:1,
-            itemSort:function(a,b){return b.raw-a.raw;},
-            callbacks:{
-              title:function(items){ return items[0].label; },
-              label:function(item){
-                if(!item.raw||item.raw===0) return null;
-                var dot=item.datasetIndex<2?' ↑ ':' ↓ ';
-                return dot+item.dataset.label+': '+maR$(item.raw);
-              },
-              afterBody:function(items){
-                var ent=0,sai=0;
-                items.forEach(function(i){if(i.datasetIndex<2)ent+=i.raw;else sai+=i.raw;});
-                if(!ent&&!sai) return [];
-                return ['─────────────','Saldo do dia: '+maR$(ent-sai)];
-              }
-            }
-          }
-        },
-        scales:{
-          x:{
-            grid:{display:false},
-            ticks:{
-              font:{size:9.5, weight:'500'},
-              color:'#94A3B8',
-              maxRotation:0,
-              autoSkip:true,
-              maxTicksLimit:16
-            },
-            border:{display:false}
-          },
-          y:{
-            grid:{color:'rgba(226,232,240,.6)', drawTicks:false},
-            border:{display:false},
-            ticks:{
-              font:{size:9.5},
-              color:'#94A3B8',
-              padding:6,
-              callback:function(v){
-                if(v===0) return '0';
-                return v>=1000?(v/1000).toFixed(v%1000===0?0:1)+'k':v;
-              }
-            }
-          }
-        },
-        interaction:{mode:'index', intersect:false}
-      }
+      options:maChartOpts('#16A34A','#F87171','Recebido','Pago',true)
+    });
+  }
+
+  // Gráfico 2 — PREVISTO (A Receber e A Pagar)
+  var ctxPrev=document.getElementById('ma-chart-prev');
+  if(ctxPrev){
+    if(MA.chartPrev) MA.chartPrev.destroy();
+    MA.chartPrev=new Chart(ctxPrev.getContext('2d'),{
+      type:'bar',
+      data:{labels:labelsFmt,datasets:[
+        {label:'A Receber',data:arDia, backgroundColor:'#2563EB',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
+        {label:'A Pagar',  data:apDia, backgroundColor:'#F59E0B',borderRadius:4,barPercentage:.8,categoryPercentage:.7,borderSkipped:false},
+      ]},
+      options:maChartOpts('#2563EB','#F59E0B','A Receber','A Pagar',false)
     });
   }
 }
 
-function maToggleDS(idx){
-  if(!MA.chart)return;
-  var meta=MA.chart.getDatasetMeta(idx);
-  meta.hidden=!meta.hidden;MA.chart.update();
-  var el=document.querySelector('.ma-leg-item[data-ds="'+idx+'"]');
+function maToggleDS(idx){ /* legado - não usado */ }
+function maToggleDSReal(idx){
+  if(!MA.chartReal)return;
+  var meta=MA.chartReal.getDatasetMeta(idx);
+  meta.hidden=!meta.hidden;MA.chartReal.update();
+  var el=document.querySelector('.ma-leg-item[data-chart="real"][data-ds="'+idx+'"]');
+  if(el)el.classList.toggle('oculto',meta.hidden);
+}
+function maToggleDSPrev(idx){
+  if(!MA.chartPrev)return;
+  var meta=MA.chartPrev.getDatasetMeta(idx);
+  meta.hidden=!meta.hidden;MA.chartPrev.update();
+  var el=document.querySelector('.ma-leg-item[data-chart="prev"][data-ds="'+idx+'"]');
   if(el)el.classList.toggle('oculto',meta.hidden);
 }
 
