@@ -1337,6 +1337,7 @@ async function init(){
   const hasCached = loadLocalCache();
   buildSidebar();
   updMo();
+  initMesAtual(); // carrega MA do localStorage antes de qualquer render
   CACHE._loaded = true;
   initCashflowAno();
   restorePage();
@@ -1344,6 +1345,7 @@ async function init(){
   setSyncPill('busy', hasCached?'Atualizando…':'Carregando…');
   try{
     await pullFromSheets();
+    await maPullFromSheets(); // puxa dados MA do Sheets (funciona em qualquer browser)
     renderCurrentPage();
   } catch(e){
     setSyncPill('err','Sem conexão');
@@ -5167,24 +5169,28 @@ async function maEnviarSheets(tipo){
       var out=Object.assign({},r);
       // Remover campo interno _f
       delete out._f;
-      // Remover comentários internos (campo _comentarios não vai pro Sheets — está em comentarios como string)
+      // Serializar comentários
       if(out._comentarios){
-        // Serializar comentários para a coluna comentarios
         out.comentarios=out._comentarios.map(function(c){return c.text;}).join(' | ');
         delete out._comentarios;
       }
-      // Garantir _imp (nome do arquivo de origem)
+      // Origem do arquivo
       out._imp=r._f||'';
-      // Formatar valor corretamente
-      if(out.valor!==undefined) out.valor=String(maPV(out.valor));
-      // Formatar dias_atraso
+      // Valor: número puro com vírgula decimal (padrão BR) — nunca arredonda
+      // Ex: 11041.41 → "11041,41" | 800.0 → "800,00" | 6458.59 → "6458,59"
+      if(out.valor!==undefined){
+        var n=maPV(out.valor);
+        // toFixed(2) garante 2 casas sem arredondar de forma errada
+        // replace('.', ',') converte para padrão BR
+        out.valor=n.toFixed(2).replace('.',',');
+      }
       if(out.dias_atraso!==undefined) out.dias_atraso=String(out.dias_atraso||0);
       return out;
     });
     await api({action:'syncSheet',sheet:tipo,rows:rows});
   }catch(e){
     console.warn('Sheets sync falhou para '+tipo+':',e.message);
-    throw e; // re-lançar para quem chamou tratar
+    throw e;
   }
 }
 
@@ -5334,6 +5340,79 @@ function maDelCom(id,idx){
 }
 
 function renderMaDetalhe(){if(MA._detalhe)maVerDetalhe(MA._detalhe);else nav('mes_atual');}
+
+
+// ── PULL DO MA DO SHEETS ─────────────────────────────────────
+// Chamado no init para sincronizar dados MA em qualquer browser
+async function maPullFromSheets(){
+  try{
+    // Lê as 4 abas em paralelo
+    var results=await Promise.all([
+      api({action:'read', sheet:'received'}),
+      api({action:'read', sheet:'receivables'}),
+      api({action:'read', sheet:'paid'}),
+      api({action:'read', sheet:'payables'}),
+    ]);
+    var sheetsReceived   =results[0]||[];
+    var sheetsReceivables=results[1]||[];
+    var sheetsPaid       =results[2]||[];
+    var sheetsPayables   =results[3]||[];
+
+    // Só atualiza MA se o Sheets tiver dados
+    // Evita sobrescrever local quando Sheets está vazio
+    var sheetsTotal=sheetsReceived.length+sheetsReceivables.length+sheetsPaid.length+sheetsPayables.length;
+    if(sheetsTotal===0) return; // Sheets vazio — manter localStorage
+
+    // Converter valores: Sheets guarda "11041,41" (BR) → número
+    function parseSheetVal(v){
+      if(!v) return 0;
+      var s=String(v).trim().replace(/[R$\s]/g,'');
+      if(s.includes(',')){ s=s.replace(/\./g,'').replace(',','.'); }
+      return parseFloat(s)||0;
+    }
+    function normalizeRow(r){
+      var out=Object.assign({},r);
+      if(out.valor!==undefined) out.valor=parseSheetVal(out.valor);
+      if(out.dias_atraso!==undefined) out.dias_atraso=parseInt(out.dias_atraso)||0;
+      // Restaurar _f a partir de _imp para consistência interna
+      if(!out._f && out._imp) out._f=out._imp;
+      return out;
+    }
+
+    MA.received    =sheetsReceived.map(normalizeRow);
+    MA.receivables =sheetsReceivables.map(normalizeRow);
+    MA.paid        =sheetsPaid.map(normalizeRow);
+    MA.payables    =sheetsPayables.map(normalizeRow);
+
+    // Reconstruir hist a partir dos dados (agrupar por _imp)
+    function reconstruirHist(arr, tipo){
+      var grupos={};
+      arr.forEach(function(r){
+        var f=r._f||r._imp||'Importação';
+        if(!grupos[f]) grupos[f]={fname:f,novos:0,data:'',ts:0};
+        grupos[f].novos++;
+      });
+      return Object.values(grupos).map(function(g){
+        return {fname:g.fname,data:g.data||'—',novos:g.novos,ts:g.ts||0};
+      });
+    }
+    // Só reconstruir hist se MA.hist estiver vazio (browser novo)
+    if(!MA.hist || Object.keys(MA.hist).every(function(k){return !(MA.hist[k]||[]).length;})){
+      MA.hist={
+        received   :reconstruirHist(MA.received,   'received'),
+        receivables:reconstruirHist(MA.receivables,'receivables'),
+        paid       :reconstruirHist(MA.paid,       'paid'),
+        payables   :reconstruirHist(MA.payables,   'payables'),
+      };
+    }
+
+    maSave(); // Salvar no localStorage do browser atual
+    if(curPage==='mes_atual'||curPage==='ma-detalhe') renderMesAtual();
+  }catch(e){
+    console.warn('MA pull do Sheets falhou:', e.message);
+    // Não lançar — falha silenciosa, usa localStorage
+  }
+}
 
 // ── INIT ─────────────────────────────────────────────────────
 function initMesAtual(){
