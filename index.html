@@ -1365,8 +1365,33 @@ async function pullFromSheets(){
   // PROTEÇÃO: só sobrescreve o cache local se o Sheets tiver dados.
   // Evita apagar dados locais quando a planilha ainda está vazia.
   // ── VISÃO DO MÊS ATUAL — mesma lógica de revenues/expenses ────────
+  // Converte qualquer formato de data para DD/MM/AAAA (padrão BR usado internamente)
+  function maNormDate(s){
+    if(!s) return '';
+    var str=String(s).trim();
+    // Já está em DD/MM/AAAA
+    if(/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return str;
+    // AAAA-MM-DD
+    var m=str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return m[3]+'/'+m[2]+'/'+m[1];
+    // Formato longo: "Thu Apr 23 2026..." ou "Wed, 23 Apr 2026..."
+    try{
+      var d=new Date(str);
+      if(!isNaN(d.getTime())){
+        var dd=String(d.getDate()).padStart(2,'0');
+        var mm=String(d.getMonth()+1).padStart(2,'0');
+        var yy=d.getFullYear();
+        return dd+'/'+mm+'/'+yy;
+      }
+    }catch(e){}
+    return str;
+  }
+
   function maNormRow(r){
     var out=Object.assign({},r);
+    // Normalizar datas para DD/MM/AAAA
+    if(out.quitacao)   out.quitacao   = maNormDate(out.quitacao);
+    if(out.vencimento) out.vencimento = maNormDate(out.vencimento);
     // Converter valor: "11.041,41" (BR) ou número puro → float
     if(out.valor!==undefined){
       var v=out.valor;
@@ -4852,6 +4877,7 @@ function maLoad(){
 function renderMesAtual(){
   var mes=parseInt((document.getElementById('ma-mes')||{}).value)||new Date().getMonth()+1;
   var ano=parseInt((document.getElementById('ma-ano')||{}).value)||new Date().getFullYear();
+
   function dtMes(s){var dt=maPDT(s);return dt&&dt.getMonth()===mes-1&&dt.getFullYear()===ano;}
   var hj=maHJ();
   var rec  =MA.received.filter(function(r){return dtMes(r.quitacao);});
