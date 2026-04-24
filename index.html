@@ -4800,11 +4800,8 @@ function blurBRL(el){
 // ── FIM MÁSCARA ────────────────────────────────────────────────────────
 
 // ── ARRANQUE ──────────────────────────────────────────────────────
-init();
 
-// ══════════════════════════════════════════════════════════════
-//  VISÃO DO MÊS ATUAL — Módulo completo v2
-// ══════════════════════════════════════════════════════════════
+
 
 const MA = {
   received:[], receivables:[], paid:[], payables:[],
@@ -5415,6 +5412,14 @@ function initMesAtual(){
   if(as)Array.from(as.options).forEach(function(o){if(parseInt(o.value)===a)o.selected=true;});
   maLoad();
 }
+
+
+init();
+
+// ══════════════════════════════════════════════════════════════
+//  VISÃO DO MÊS ATUAL — Módulo completo v2
+// ══════════════════════════════════════════════════════════════
+
 
 </script>
 </body>
