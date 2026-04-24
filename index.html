@@ -1358,7 +1358,64 @@ async function pullFromSheets(){
 
   // PROTEÇÃO: só sobrescreve o cache local se o Sheets tiver dados.
   // Evita apagar dados locais quando a planilha ainda está vazia.
-  const sheetsTotal = (data.revenues||[]).length + (data.expenses||[]).length;
+  // ── VISÃO DO MÊS ATUAL — processar as 4 abas que vieram no readAll ──
+  function maParseVal(v){
+    if(!v||v==='') return 0;
+    var s=String(v).trim().replace(/[R$\s]/g,'');
+    // Formato BR: 11.041,41 → remover ponto, trocar vírgula por ponto
+    if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+    return parseFloat(s)||0;
+  }
+  function maNormRow(r){
+    var out=Object.assign({},r);
+    if(out.valor!==undefined) out.valor=maParseVal(out.valor);
+    if(out.dias_atraso!==undefined) out.dias_atraso=parseInt(out.dias_atraso)||0;
+    // _f é campo interno — restaurar de _imp
+    if(!out._f && out._imp) out._f=out._imp;
+    return out;
+  }
+
+  var maReceived   =(data.received||[]).map(maNormRow);
+  var maReceivables=(data.receivables||[]).map(maNormRow);
+  var maPaid       =(data.paid||[]).map(maNormRow);
+  var maPayables   =(data.payables||[]).map(maNormRow);
+  var maTotalSheets=maReceived.length+maReceivables.length+maPaid.length+maPayables.length;
+
+  if(maTotalSheets>0){
+    // Sheets tem dados — atualizar MA
+    MA.received   =maReceived;
+    MA.receivables=maReceivables;
+    MA.paid       =maPaid;
+    MA.payables   =maPayables;
+    // Reconstruir histório de importações a partir de _imp
+    function maRecHist(arr){
+      var g={};
+      arr.forEach(function(r){
+        var f=r._imp||r._f||'Importação';
+        if(!g[f]) g[f]={fname:f,novos:0,data:'—',ts:0};
+        g[f].novos++;
+      });
+      return Object.values(g);
+    }
+    // Só reconstruir se hist local estiver vazio (browser novo)
+    var histVazio=!MA.hist||Object.keys(MA.hist).every(function(k){return!(MA.hist[k]||[]).length;});
+    if(histVazio){
+      MA.hist={
+        received   :maRecHist(MA.received),
+        receivables:maRecHist(MA.receivables),
+        paid       :maRecHist(MA.paid),
+        payables   :maRecHist(MA.payables),
+      };
+    }
+    maSave();
+    // Atualizar render se estiver na página
+    if(typeof curPage!=='undefined'&&(curPage==='mes_atual'||curPage==='ma-detalhe')){
+      renderMesAtual();
+    }
+  }
+
+
+    const sheetsTotal = (data.revenues||[]).length + (data.expenses||[]).length;
   const localTotal  = Object.values(CACHE.revenues||{}).flat().length
                     + Object.values(CACHE.expenses||{}).flat().length;
 
@@ -1451,61 +1508,7 @@ async function pullFromSheets(){
     return s;
   });
 
-  // ── VISÃO DO MÊS ATUAL — processar as 4 abas que vieram no readAll ──
-  function maParseVal(v){
-    if(!v||v==='') return 0;
-    var s=String(v).trim().replace(/[R$\s]/g,'');
-    // Formato BR: 11.041,41 → remover ponto, trocar vírgula por ponto
-    if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
-    return parseFloat(s)||0;
-  }
-  function maNormRow(r){
-    var out=Object.assign({},r);
-    if(out.valor!==undefined) out.valor=maParseVal(out.valor);
-    if(out.dias_atraso!==undefined) out.dias_atraso=parseInt(out.dias_atraso)||0;
-    // _f é campo interno — restaurar de _imp
-    if(!out._f && out._imp) out._f=out._imp;
-    return out;
-  }
 
-  var maReceived   =(data.received||[]).map(maNormRow);
-  var maReceivables=(data.receivables||[]).map(maNormRow);
-  var maPaid       =(data.paid||[]).map(maNormRow);
-  var maPayables   =(data.payables||[]).map(maNormRow);
-  var maTotalSheets=maReceived.length+maReceivables.length+maPaid.length+maPayables.length;
-
-  if(maTotalSheets>0){
-    // Sheets tem dados — atualizar MA
-    MA.received   =maReceived;
-    MA.receivables=maReceivables;
-    MA.paid       =maPaid;
-    MA.payables   =maPayables;
-    // Reconstruir histório de importações a partir de _imp
-    function maRecHist(arr){
-      var g={};
-      arr.forEach(function(r){
-        var f=r._imp||r._f||'Importação';
-        if(!g[f]) g[f]={fname:f,novos:0,data:'—',ts:0};
-        g[f].novos++;
-      });
-      return Object.values(g);
-    }
-    // Só reconstruir se hist local estiver vazio (browser novo)
-    var histVazio=!MA.hist||Object.keys(MA.hist).every(function(k){return!(MA.hist[k]||[]).length;});
-    if(histVazio){
-      MA.hist={
-        received   :maRecHist(MA.received),
-        receivables:maRecHist(MA.receivables),
-        paid       :maRecHist(MA.paid),
-        payables   :maRecHist(MA.payables),
-      };
-    }
-    maSave();
-    // Atualizar render se estiver na página
-    if(typeof curPage!=='undefined'&&(curPage==='mes_atual'||curPage==='ma-detalhe')){
-      renderMesAtual();
-    }
-  }
 
   CACHE._loaded = true;
   saveLocalCache();
