@@ -1274,6 +1274,12 @@ const CACHE = {
   history  : [],   // [{id,type,fname,count,months,ts}]
   settings : {},   // {key: value}
   services : [],   // [{id,name,employees,margin,tax,months,items,ts}]
+  // ── Visão do Mês Atual ──────────────────────────────────────────
+  received    : [],  // cobranças quitadas
+  receivables : [],  // a receber / inadimplentes
+  paid        : [],  // pagamentos realizados
+  payables    : [],  // contas a pagar
+  maHist      : {},  // histórico de importações MA
   _loaded  : false,
   _lastSync: null,
 };
@@ -1358,59 +1364,49 @@ async function pullFromSheets(){
 
   // PROTEÇÃO: só sobrescreve o cache local se o Sheets tiver dados.
   // Evita apagar dados locais quando a planilha ainda está vazia.
-  // ── VISÃO DO MÊS ATUAL — processar as 4 abas que vieram no readAll ──
-  function maParseVal(v){
-    if(!v||v==='') return 0;
-    var s=String(v).trim().replace(/[R$\s]/g,'');
-    // Formato BR: 11.041,41 → remover ponto, trocar vírgula por ponto
-    if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
-    return parseFloat(s)||0;
-  }
+  // ── VISÃO DO MÊS ATUAL — mesma lógica de revenues/expenses ────────
   function maNormRow(r){
     var out=Object.assign({},r);
-    if(out.valor!==undefined) out.valor=maParseVal(out.valor);
+    // Converter valor: "11.041,41" (BR) ou número puro → float
+    if(out.valor!==undefined){
+      var v=out.valor;
+      if(typeof v==='number'){ out.valor=Math.round(v*100)/100; }
+      else {
+        var s=String(v).trim().replace(/[R$\s]/g,'');
+        if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+        out.valor=parseFloat(s)||0;
+      }
+    }
     if(out.dias_atraso!==undefined) out.dias_atraso=parseInt(out.dias_atraso)||0;
-    // _f é campo interno — restaurar de _imp
     if(!out._f && out._imp) out._f=out._imp;
     return out;
   }
-
-  var maReceived   =(data.received||[]).map(maNormRow);
-  var maReceivables=(data.receivables||[]).map(maNormRow);
-  var maPaid       =(data.paid||[]).map(maNormRow);
-  var maPayables   =(data.payables||[]).map(maNormRow);
-  var maTotalSheets=maReceived.length+maReceivables.length+maPaid.length+maPayables.length;
-
-  if(maTotalSheets>0){
-    // Sheets tem dados — atualizar MA
-    MA.received   =maReceived;
-    MA.receivables=maReceivables;
-    MA.paid       =maPaid;
-    MA.payables   =maPayables;
-    // Reconstruir histório de importações a partir de _imp
-    function maRecHist(arr){
-      var g={};
-      arr.forEach(function(r){
-        var f=r._imp||r._f||'Importação';
-        if(!g[f]) g[f]={fname:f,novos:0,data:'—',ts:0};
-        g[f].novos++;
-      });
-      return Object.values(g);
-    }
-    // Só reconstruir se hist local estiver vazio (browser novo)
+  // Processar as 4 abas — igual ao padrão de revenues/expenses
+  CACHE.received    = (data.received   ||[]).map(maNormRow);
+  CACHE.receivables = (data.receivables||[]).map(maNormRow);
+  CACHE.paid        = (data.paid       ||[]).map(maNormRow);
+  CACHE.payables    = (data.payables   ||[]).map(maNormRow);
+  // Sincronizar MA com CACHE (sempre — igual ao padrão)
+  MA.received    = CACHE.received;
+  MA.receivables = CACHE.receivables;
+  MA.paid        = CACHE.paid;
+  MA.payables    = CACHE.payables;
+  // Reconstruir hist se vier de outro browser
+  var maTot=CACHE.received.length+CACHE.receivables.length+CACHE.paid.length+CACHE.payables.length;
+  if(maTot>0){
     var histVazio=!MA.hist||Object.keys(MA.hist).every(function(k){return!(MA.hist[k]||[]).length;});
     if(histVazio){
-      MA.hist={
-        received   :maRecHist(MA.received),
-        receivables:maRecHist(MA.receivables),
-        paid       :maRecHist(MA.paid),
-        payables   :maRecHist(MA.payables),
+      function maRecHist(arr){
+        var g={};
+        arr.forEach(function(r){ var f=r._imp||r._f||'Importação'; if(!g[f])g[f]={fname:f,novos:0,data:'—',ts:0}; g[f].novos++; });
+        return Object.values(g);
+      }
+      MA.hist=CACHE.maHist={
+        received   :maRecHist(CACHE.received),
+        receivables:maRecHist(CACHE.receivables),
+        paid       :maRecHist(CACHE.paid),
+        payables   :maRecHist(CACHE.payables),
       };
-    }
-    maSave();
-    // Atualizar render se estiver na página
-    if(typeof curPage!=='undefined'&&(curPage==='mes_atual'||curPage==='ma-detalhe')){
-      renderMesAtual();
     }
   }
 
@@ -4834,8 +4830,23 @@ function maFindCol(keys,terms){
   return null;
 }
 function maHJ(){return new Date(new Date().toDateString());}
-function maSave(){try{localStorage.setItem('ma_'+CFG.api.slice(-10),JSON.stringify({received:MA.received,receivables:MA.receivables,paid:MA.paid,payables:MA.payables,hist:MA.hist}));}catch(e){}}
-function maLoad(){try{var r=localStorage.getItem('ma_'+CFG.api.slice(-10));if(r){var d=JSON.parse(r);if(d){MA.received=d.received||[];MA.receivables=d.receivables||[];MA.paid=d.paid||[];MA.payables=d.payables||[];MA.hist=d.hist||{};}}}catch(e){}}
+function maSave(){
+  // Salvar no CACHE unificado — mesmo mecanismo que receitas/despesas
+  CACHE.received    = MA.received;
+  CACHE.receivables = MA.receivables;
+  CACHE.paid        = MA.paid;
+  CACHE.payables    = MA.payables;
+  CACHE.maHist      = MA.hist;
+  saveLocalCache(); // salva tudo junto no LS_KEY
+}
+function maLoad(){
+  // Carregar do CACHE — já foi carregado pelo loadLocalCache() no init
+  MA.received    = CACHE.received    || [];
+  MA.receivables = CACHE.receivables || [];
+  MA.paid        = CACHE.paid        || [];
+  MA.payables    = CACHE.payables    || [];
+  MA.hist        = CACHE.maHist      || {};
+}
 
 // ── RENDER PRINCIPAL ──────────────────────────────────────────
 function renderMesAtual(){
