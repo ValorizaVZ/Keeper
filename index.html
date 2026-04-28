@@ -1152,13 +1152,23 @@ body.pres #app{margin-top:34px}
             ← Voltar
           </button>
         </div>
+        <!-- KPIs por tipo (só visível em Recebido) -->
+        <div id="ma-rec-kpis" style="display:none;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px"></div>
+
+        <!-- Toolbar Recebido -->
+        <div id="ma-rec-toolbar" style="display:none;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 12px;flex:1;max-width:300px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="ma-rec-search" type="text" placeholder="Buscar cliente..." style="border:none;outline:none;font-size:12.5px;background:transparent;width:100%" oninput="maRecRender()">
+          </div>
+        </div>
+
         <!-- Tabela de detalhe -->
-        <div class="card">
-          <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:860px">
+        <div class="card" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:980px">
             <colgroup>
-              <col style="width:80px"><col><col style="width:105px">
-              <col style="width:85px"><col style="width:120px"><col style="width:160px">
-              <col style="width:160px"><col style="width:80px">
+              <col style="width:36px"><col><col style="width:110px">
+              <col style="width:130px"><col style="width:120px"><col style="width:170px">
             </colgroup>
             <thead id="ma-det-head"></thead>
             <tbody id="ma-det-list"></tbody>
@@ -1458,7 +1468,7 @@ async function pullFromSheets(){
   CACHE.paid        = (data.paid       ||[]).map(maNormRow);
   CACHE.payables    = (data.payables   ||[]).map(maNormRow);
   // Sincronizar MA com CACHE (sempre — igual ao padrão)
-  MA.received    = CACHE.received;
+  MA.received    = maRecAplicarMemoria ? maRecAplicarMemoria(CACHE.received)    : CACHE.received;
   MA.receivables = CACHE.receivables;
   MA.paid        = CACHE.paid;
   MA.payables    = CACHE.payables;
@@ -5390,6 +5400,8 @@ function maConfirmImport(){
   var result=_maPending,tipo=result.tipo,fname=result.fname;
   var existIds={};MA[tipo].filter(function(r){return r._f!==fname;}).forEach(function(r){existIds[r.id]=1;});
   var novosReais=result.novos.filter(function(r){return !existIds[r.id];});
+  // Aplicar memória de tipos para recebidos (tipo padrão = Mensalidade)
+  if(tipo==='received') novosReais=maRecAplicarMemoria(novosReais);
   MA[tipo]=MA[tipo].filter(function(r){return r._f!==fname;}).concat(novosReais);
   if(!MA.hist[tipo])MA.hist[tipo]=[];
   MA.hist[tipo].push({fname:fname,data:new Date().toLocaleDateString('pt-BR'),novos:novosReais.length,ts:Date.now()});
@@ -5438,6 +5450,13 @@ async function maEnviarSheets(tipo){
 var REGUA_OPTS=['Com a Valoriza','Valoriza + Operação','Valoriza + Gestor','Valoriza + Jurídico'];
 function maVerDetalhe(tipo){
   MA._detalhe=tipo;
+  // Esconder elementos exclusivos do Recebido
+  if(tipo!=='recebido'){
+    var kp=document.getElementById('ma-rec-kpis');
+    var tb=document.getElementById('ma-rec-toolbar');
+    if(kp)kp.style.display='none';
+    if(tb)tb.style.display='none';
+  }
   var mes=parseInt((document.getElementById('ma-mes')||{}).value)||new Date().getMonth()+1;
   var ano=parseInt((document.getElementById('ma-ano')||{}).value)||new Date().getFullYear();
   function dtMes(s){var dt=maPDT(s);return dt&&dt.getMonth()===mes-1&&dt.getFullYear()===ano;}
@@ -5458,10 +5477,28 @@ function maVerDetalhe(tipo){
   }else if(tipo==='recebido'){
     dados=MA.received.filter(function(r){return dtMes(r.quitacao);});
     titulo='Recebido — '+dados.length+' pagamento'+(dados.length!==1?'s':'');
-    document.getElementById('ma-det-head').innerHTML=TH_REC;
-    document.getElementById('ma-det-list').innerHTML=dados.map(function(r){
-      return '<tr><td class="ma-det-td mono" style="color:var(--t4);font-size:11px">#'+r.id+'</td><td class="ma-det-td"><strong>'+r.cliente+'</strong></td><td class="ma-det-td mono">'+r.quitacao+'</td><td class="ma-det-td mono tr" style="color:var(--green);font-weight:700">'+maR$(r.valor)+'</td><td class="ma-det-td" style="font-size:11px;color:var(--t3)">'+r.conta+'</td></tr>';
-    }).join('');
+    // Header com coluna Tipo
+    MA_REC_SORT = {col:null, dir:1}; // reset ao abrir
+    var thSort='cursor:pointer;user-select:none;';
+    document.getElementById('ma-det-head').innerHTML=
+      '<tr>'+
+      '<th class="ma-det-th" style="width:36px"></th>'+
+      '<th class="ma-det-th">Cliente</th>'+
+      '<th class="ma-det-th" style="width:110px">Data</th>'+
+      '<th class="ma-det-th" style="width:130px;text-align:right;'+thSort+'" onclick="maRecSortBy(&quot;valor&quot;)" id="ma-th-val">Valor <span id="ma-ico-val">↕</span></th>'+
+      '<th class="ma-det-th" style="width:120px">Conta</th>'+
+      '<th class="ma-det-th" style="width:170px;'+thSort+'" onclick="maRecSortBy(&quot;tipo&quot;)" id="ma-th-tipo">Tipo <span id="ma-ico-tipo">↕</span></th>'+
+      '</tr>';
+    // Mostrar KPIs e toolbar
+    var kp=document.getElementById('ma-rec-kpis');
+    var tb=document.getElementById('ma-rec-toolbar');
+    if(kp)kp.style.display='grid';
+    if(tb)tb.style.display='flex';
+    // Iniciar render
+    // Sincronizar MA_REC_DADOS com MA.received (referências vivas)
+    MA_REC_DADOS = dados;
+    MA_REC_EXP   = {};
+    maRecRender();
   }else if(tipo==='pago'){
     dados=MA.paid.filter(function(r){return dtMes(r.quitacao);});
     titulo='Pago — '+dados.length+' lançamento'+(dados.length!==1?'s':'');
@@ -5577,6 +5614,250 @@ function maAddCom(id){
 function maDelCom(id,idx){
   var r=MA.receivables.find(function(x){return String(x.id)===String(id);});if(!r||!r._comentarios)return;
   r._comentarios.splice(idx,1);maSave();maVerComentarios(id);
+}
+
+
+
+// ══════════════════════════════════════════════════════════════
+//  MÓDULO RECEBIDO — Tipo, Agrupamento, KPIs, Memória
+// ══════════════════════════════════════════════════════════════
+
+var MA_REC_DADOS = [];   // dados do mês atual
+var MA_REC_EXP   = {};   // grupos expandidos {chave: true}
+var MA_REC_SORT  = {col:null, dir:1}; // col: 'valor'|'tipo'|null, dir: 1=asc -1=desc
+var TIPOS_REC = ['Mensalidade','Venda Nova','Venda Nova TCV','Multa','Outros'];
+
+// ── MEMÓRIA DE TIPOS ─────────────────────────────────────────
+// Chave: "ID|cliente|valor" → tipo
+// Fallback: "cliente|valor" → tipo
+function maRecMemKey(r){ return String(r.id)+'|'+r.cliente+'|'+String(maPV(r.valor)); }
+function maRecMemKeyFallback(r){ return r.cliente+'|'+String(maPV(r.valor)); }
+
+function maRecGetMem(){
+  try{ return JSON.parse(localStorage.getItem('ma_rec_tipos_'+CFG.api.slice(-10))||'{}'); }
+  catch(e){ return {}; }
+}
+function maRecSaveMem(mem){
+  try{ localStorage.setItem('ma_rec_tipos_'+CFG.api.slice(-10), JSON.stringify(mem)); }
+  catch(e){}
+}
+
+// Ao classificar um lançamento: salva na memória e no registro
+function maRecSalvarTipo(sel){
+  var id = sel.dataset.recId;
+  var tipo = sel.value;
+  // Encontrar o registro em MA.received
+  var r = MA.received.find(function(x){ return String(x.id)===String(id); });
+  if(!r){ console.warn('maRecSalvarTipo: id não encontrado', id); return; }
+  // Atualizar tipo no objeto
+  r.tipo = tipo;
+  // Atualizar também em MA_REC_DADOS (mesma referência, mas garantir)
+  var rDados = MA_REC_DADOS.find(function(x){ return String(x.id)===String(id); });
+  if(rDados) rDados.tipo = tipo;
+  // Salvar na memória permanente (chave dupla para maior cobertura)
+  var mem = maRecGetMem();
+  mem[maRecMemKey(r)]         = tipo;
+  mem[maRecMemKeyFallback(r)] = tipo;
+  maRecSaveMem(mem);
+  // Persistir no localStorage/CACHE
+  maSave();
+  // Atualizar UI imediatamente
+  maRecKpis();
+  maRecRender();
+  toast('Tipo atualizado: '+tipo,'ok');
+}
+
+// Aplicar memória ao importar novos dados
+function maRecAplicarMemoria(lista){
+  var mem = maRecGetMem();
+  lista.forEach(function(r){
+    // Memória sempre tem prioridade (inclui alterações manuais)
+    // 1. Buscar por ID+cliente+valor (mais preciso)
+    var t = mem[maRecMemKey(r)];
+    // 2. Fallback: nome+valor
+    if(!t) t = mem[maRecMemKeyFallback(r)];
+    // 3. Manter o que veio do Sheets se não tiver na memória
+    // 4. Default final: Mensalidade
+    r.tipo = t || r.tipo || 'Mensalidade';
+  });
+  return lista;
+}
+
+// ── KPIs ─────────────────────────────────────────────────────
+function maRecKpis(){
+  var kpiEl = document.getElementById('ma-rec-kpis');
+  if(!kpiEl) return;
+  var totais={}, conts={};
+  TIPOS_REC.forEach(function(t){ totais[t]=0; conts[t]=0; });
+  // Agrupar por tipo → contar clientes únicos (não pagamentos)
+  var clientesPorTipo = {};
+  TIPOS_REC.forEach(function(t){ clientesPorTipo[t]={}; });
+  MA_REC_DADOS.forEach(function(r){
+    var t = r.tipo || 'Mensalidade';
+    if(totais[t]===undefined){ totais[t]=0; conts[t]=0; clientesPorTipo[t]={}; }
+    totais[t] += maPV(r.valor);
+    // Contar cliente único por tipo (mesmo cliente com 2 pagamentos TCV = 1 cliente)
+    clientesPorTipo[t][r.cliente] = true;
+  });
+  // conts = número de clientes únicos
+  TIPOS_REC.forEach(function(t){
+    conts[t] = clientesPorTipo[t] ? Object.keys(clientesPorTipo[t]).length : 0;
+  });
+  var cores = {
+    'Mensalidade':   'var(--co)',
+    'Venda Nova':    'var(--green)',
+    'Venda Nova TCV':'#7C3AED',
+    'Multa':         'var(--red)',
+    'Outros':        'var(--t3)',
+  };
+  // Mostrar só tipos com valor > 0
+  var ativos = TIPOS_REC.filter(function(t){ return conts[t]>0; });
+  if(!ativos.length) ativos = ['Mensalidade'];
+  kpiEl.style.gridTemplateColumns = 'repeat('+Math.min(ativos.length,4)+',1fr)';
+  kpiEl.innerHTML = ativos.map(function(t){
+    var cor = cores[t]||'var(--t3)';
+    return '<div class="ma-kpi" style="border-left:3px solid '+cor+'">'+
+      '<div class="ma-kpi-label">'+t+'</div>'+
+      '<div class="ma-kpi-val" style="color:'+cor+';font-size:17px">'+maR$(totais[t])+'</div>'+
+      '<div class="ma-kpi-sub">'+conts[t]+' cliente'+(conts[t]!==1?'s':'')+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+// ── AGRUPAMENTO INTELIGENTE ───────────────────────────────────
+// Agrupa por cliente + tipo. Cada grupo tem sua própria linha.
+function maRecAgrupar(lista){
+  var grupos = [], mapa = {};
+  lista.forEach(function(r){
+    var tipo = r.tipo || 'Mensalidade';
+    var chave = r.cliente + '|||' + tipo;
+    if(!mapa[chave]){
+      mapa[chave] = {chave:chave, cliente:r.cliente, tipo:tipo, total:0, itens:[], conta:r.conta};
+      grupos.push(mapa[chave]);
+    }
+    mapa[chave].total += maPV(r.valor);
+    mapa[chave].itens.push(r);
+  });
+  return grupos;
+}
+
+// ── ORDENAÇÃO ────────────────────────────────────────────────
+function maRecSortBy(col){
+  if(MA_REC_SORT.col===col) MA_REC_SORT.dir*=-1;
+  else { MA_REC_SORT.col=col; MA_REC_SORT.dir=1; }
+  // Atualizar ícones
+  ['val','tipo'].forEach(function(c){
+    var el=document.getElementById('ma-ico-'+c);
+    if(el) el.textContent='↕';
+  });
+  var ico=document.getElementById('ma-ico-'+(col==='valor'?'val':'tipo'));
+  if(ico) ico.textContent=MA_REC_SORT.dir===1?'↑':'↓';
+  maRecRender();
+}
+
+// ── RENDER PRINCIPAL ─────────────────────────────────────────
+function maRecRender(){
+  var busca = (document.getElementById('ma-rec-search')||{}).value||'';
+  busca = busca.toLowerCase();
+
+  var lista = MA_REC_DADOS.filter(function(r){
+    return !busca || r.cliente.toLowerCase().indexOf(busca)>=0;
+  });
+
+  var grupos = maRecAgrupar(lista);
+
+  // Ordenar grupos conforme seleção
+  grupos.sort(function(a,b){
+    if(MA_REC_SORT.col==='valor'){
+      return (a.total-b.total)*MA_REC_SORT.dir;
+    } else if(MA_REC_SORT.col==='tipo'){
+      var ia=TIPOS_REC.indexOf(a.tipo), ib=TIPOS_REC.indexOf(b.tipo);
+      var r=ia-ib;
+      if(r===0){ if(a.cliente<b.cliente)return -1; if(a.cliente>b.cliente)return 1; }
+      return r*MA_REC_SORT.dir;
+    } else {
+      // Padrão: cliente A-Z, depois tipo
+      if(a.cliente < b.cliente) return -1;
+      if(a.cliente > b.cliente) return 1;
+      return TIPOS_REC.indexOf(a.tipo) - TIPOS_REC.indexOf(b.tipo);
+    }
+  });
+
+  var CORES_TIPO = {
+    'Mensalidade':   'var(--co)',
+    'Venda Nova':    'var(--green)',
+    'Venda Nova TCV':'#7C3AED',
+    'Multa':         'var(--red)',
+    'Outros':        'var(--t3)',
+  };
+
+  var rows = '';
+  grupos.forEach(function(g){
+    var exp    = !!MA_REC_EXP[g.chave];
+    var count  = g.itens.length;
+    var cor    = CORES_TIPO[g.tipo] || 'var(--t3)';
+    var dataEx = g.itens.map(function(r){return r.quitacao;}).sort().pop()||'';
+
+    // Linha do grupo
+    rows += '<tr style="background:var(--bg);border-bottom:2px solid var(--border)">'+
+      '<td class="ma-det-td" style="text-align:center;padding:8px 4px">'+
+        '<button onclick="maRecToggle(\''+g.chave.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')" '+
+          'style="background:none;border:none;cursor:pointer;color:var(--co);font-size:15px;line-height:1;padding:0;width:22px;transition:transform .15s" '+
+          'title="'+(exp?'Recolher':'Expandir')+'">'+
+          (exp?'▾':'▸')+
+        '</button>'+
+      '</td>'+
+      '<td class="ma-det-td" style="white-space:normal">'+
+        '<strong>'+g.cliente+'</strong>'+
+        (count>1?'<span style="margin-left:8px;background:var(--bg);border:1px solid var(--border);border-radius:99px;font-size:10px;padding:1px 7px;color:var(--t3);font-weight:600">'+count+'x</span>':'')+
+      '</td>'+
+      '<td class="ma-det-td mono" style="color:var(--t4);font-size:11px">'+dataEx+'</td>'+
+      '<td class="ma-det-td mono tr" style="font-weight:700;color:var(--green)">'+maR$(g.total)+'</td>'+
+      '<td class="ma-det-td" style="font-size:11px;color:var(--t3)">'+g.conta+'</td>'+
+      '<td class="ma-det-td">'+
+        '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--border);color:'+cor+'">'+
+          g.tipo+
+        '</span>'+
+      '</td>'+
+    '</tr>';
+
+    // Linhas filhas (expandidas)
+    if(exp){
+      g.itens.forEach(function(r){
+        var opts = TIPOS_REC.map(function(t){
+          return '<option value="'+t+'"'+((r.tipo||'Mensalidade')===t?' selected':'')+'>'+t+'</option>';
+        }).join('');
+        rows += '<tr style="background:#F8FAFF">'+
+          '<td class="ma-det-td" style="padding-left:18px;color:var(--t4);font-size:11px;text-align:right">↳</td>'+
+          '<td class="ma-det-td" style="padding-left:14px;font-size:12px;color:var(--t2)">'+
+            '<span style="color:var(--t4);font-family:var(--mono);font-size:11px;margin-right:6px">#'+r.id+'</span>'+
+            r.cliente+
+          '</td>'+
+          '<td class="ma-det-td mono" style="font-size:11px">'+r.quitacao+'</td>'+
+          '<td class="ma-det-td mono tr" style="color:var(--green);font-weight:600;font-size:12px">'+maR$(r.valor)+'</td>'+
+          '<td class="ma-det-td" style="font-size:11px;color:var(--t3)">'+r.conta+'</td>'+
+          '<td class="ma-det-td">'+
+            '<select class="ma-regua" data-rec-id="'+r.id+'" onchange="maRecSalvarTipo(this)" '+
+              'style="font-size:11px;padding:3px 8px;max-width:160px;border-color:'+cor+'">'+
+              opts+
+            '</select>'+
+          '</td>'+
+        '</tr>';
+      });
+    }
+  });
+
+  document.getElementById('ma-det-list').innerHTML = rows;
+  var emEl = document.getElementById('ma-det-empty');
+  if(emEl) emEl.style.display = grupos.length ? 'none' : 'block';
+
+  maRecKpis();
+}
+
+function maRecToggle(chave){
+  if(MA_REC_EXP[chave]) delete MA_REC_EXP[chave];
+  else MA_REC_EXP[chave] = true;
+  maRecRender();
 }
 
 function renderMaDetalhe(){if(MA._detalhe)maVerDetalhe(MA._detalhe);else nav('mes_atual');}
