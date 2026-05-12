@@ -1548,8 +1548,30 @@ async function pullFromSheets(){
   // Settings — preservar tipos e usuários locais ao puxar do Sheets
   var oldTypesRaw = CACHE.settings['__types__'] || '';
   var oldUsersRaw = CACHE.settings['__users__'] || '';
+  // Preservar configurações locais (__dist__, __tcv_months__)
+  // Lendo tanto do CACHE atual quanto do localStorage direto
+  var oldDistKeys = {};
+  Object.keys(CACHE.settings).forEach(function(k){
+    if(k.startsWith('__dist__') || k.indexOf('__tcv_months__')>=0) oldDistKeys[k]=CACHE.settings[k];
+  });
+  // Também tentar ler do localStorage direto (mais confiável)
+  try{
+    var lsRaw=localStorage.getItem(LS_KEY);
+    if(lsRaw){
+      var lsData=JSON.parse(lsRaw);
+      if(lsData&&lsData.settings){
+        Object.keys(lsData.settings).forEach(function(k){
+          if(k.startsWith('__dist__') || k.indexOf('__tcv_months__')>=0) oldDistKeys[k]=lsData.settings[k];
+        });
+      }
+    }
+  }catch(e){}
   CACHE.settings = {};
   (data.settings||[]).forEach(function(s){ CACHE.settings[s.key]=s.value; });
+  // Restaurar — localStorage tem prioridade sobre Sheets para __dist__
+  Object.keys(oldDistKeys).forEach(function(k){
+    if(!CACHE.settings[k] || CACHE.settings[k]==='0') CACHE.settings[k]=oldDistKeys[k];
+  });
 
   // Mesclar tipos customizados
   if(oldTypesRaw){
