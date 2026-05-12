@@ -2327,9 +2327,10 @@ function renderDash(){
   const prevFrom=selFrom.value, prevTo=selTo.value;
   selFrom.innerHTML=allYMs.map(function(y){return '<option value="'+y+'">'+fmtYM(y)+'</option>';}).join('');
   selTo.innerHTML  =selFrom.innerHTML;
-  // Default: De Janeiro/2026 até mês anterior ao atual
-  var defaultFrom='2026-01';
-  var prevMonthDate=new Date(S.month);prevMonthDate.setMonth(prevMonthDate.getMonth()-1);
+  // Default: Janeiro do ano atual → mês anterior ao mês corrente
+  var anoAtual=new Date().getFullYear();
+  var defaultFrom=anoAtual+'-01';
+  var prevMonthDate=new Date();prevMonthDate.setDate(1);prevMonthDate.setMonth(prevMonthDate.getMonth()-1);
   var defaultTo=ymOf(prevMonthDate);
   if(allYMs.includes(prevFrom))selFrom.value=prevFrom; else selFrom.value=allYMs.includes(defaultFrom)?defaultFrom:allYMs[0];
   if(allYMs.includes(prevTo))  selTo.value=prevTo;   else selTo.value=allYMs.includes(defaultTo)?defaultTo:allYMs[allYMs.length-1];
