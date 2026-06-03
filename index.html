@@ -1553,7 +1553,7 @@ async function pullFromSheets(){
   // Lendo tanto do CACHE atual quanto do localStorage direto
   var oldDistKeys = {};
   Object.keys(CACHE.settings).forEach(function(k){
-    if(k.startsWith('__dist__') || k.indexOf('__tcv_months__')>=0 || k==='__dre_map__') oldDistKeys[k]=CACHE.settings[k];
+    if(k.startsWith('__dist__') || k.startsWith('__retiradas__') || k.indexOf('__tcv_months__')>=0 || k==='__dre_map__') oldDistKeys[k]=CACHE.settings[k];
   });
   // Também tentar ler do localStorage direto (mais confiável)
   try{
@@ -1562,7 +1562,7 @@ async function pullFromSheets(){
       var lsData=JSON.parse(lsRaw);
       if(lsData&&lsData.settings){
         Object.keys(lsData.settings).forEach(function(k){
-          if(k.startsWith('__dist__') || k.indexOf('__tcv_months__')>=0 || k==='__dre_map__') oldDistKeys[k]=lsData.settings[k];
+          if(k.startsWith('__dist__') || k.startsWith('__retiradas__') || k.indexOf('__tcv_months__')>=0 || k==='__dre_map__') oldDistKeys[k]=lsData.settings[k];
         });
       }
     }
@@ -2638,6 +2638,46 @@ function distSetPct(inp){
   renderDistrib();
 }
 
+// ── RETIRADAS DA DISTRIBUIÇÃO ───────────────────────────────────
+function distGetRetiradas(ym){
+  try{
+    var raw=CACHE.settings['__retiradas__'+ym];
+    if(raw&&raw!=='0'){var p=JSON.parse(raw);if(Array.isArray(p))return p;}
+  }catch(e){}
+  return [];
+}
+function distSaveRetiradas(ym, lista){
+  CACHE.settings['__retiradas__'+ym]=JSON.stringify(lista);
+  saveLocalCache();
+  queueWrite('settings',[{key:'__retiradas__'+ym, value:JSON.stringify(lista)}]);
+}
+function distAddRetirada(ym, isAcum){
+  var suffix = isAcum ? 'acum' : ym.replace('-','_');
+  var valEl = document.getElementById('distRetVal_'+suffix);
+  var datEl = document.getElementById('distRetDat_'+suffix);
+  var obsEl = document.getElementById('distRetObs_'+suffix);
+  if(!valEl||!datEl) return;
+  var val = parseFloat(valEl.value)||0;
+  if(val<=0){ toast('Informe um valor válido','err'); return; }
+  var lista = distGetRetiradas(ym);
+  lista.push({
+    id: Date.now(),
+    valor: val,
+    data: datEl.value || new Date().toISOString().slice(0,10),
+    obs: obsEl ? obsEl.value.trim() : ''
+  });
+  distSaveRetiradas(ym, lista);
+  valEl.value=''; if(obsEl) obsEl.value='';
+  renderDistrib();
+  toast('Retirada registrada','ok');
+}
+function distDelRetirada(ym, id){
+  var lista = distGetRetiradas(ym).filter(function(r){return r.id!==id;});
+  distSaveRetiradas(ym, lista);
+  renderDistrib();
+  toast('Retirada removida','ok');
+}
+
 function renderDistrib(){
   if(!CACHE._loaded)return;
   var ym=ymOf(S.month);
@@ -2775,6 +2815,77 @@ function renderDistrib(){
     h+='<tr style="background:'+(acum.sV>=0?'#f0fdf4':'#fff1f2')+'"><td style="padding:12px 20px;font-weight:800;color:'+asg+'">Saldo para distribui\xe7\xe3o</td>';
     h+='<td style="padding:12px 20px;text-align:right;font-weight:800;color:'+asg+'">'+R$(acum.sV)+'</td></tr>';
 
+    // ── Retiradas acumuladas ────────────────────────────────────
+    var todasRet=[];
+    ymsAno.forEach(function(mx){
+      distGetRetiradas(mx).forEach(function(r){todasRet.push(Object.assign({},r,{_ym:mx}));});
+    });
+    todasRet.sort(function(a,b){return a.data<b.data?-1:a.data>b.data?1:0;});
+    var totalRetAno=todasRet.reduce(function(s,r){return s+r.valor;},0);
+    var sldFinalAno=acum.sV-totalRetAno;
+    var sfaG=sldFinalAno>=0?'#16A34A':'#DC2626';
+    var retOpen=DRE_EXP['__ret_acum__'];
+
+    // Botão para abrir/fechar formulário de retirada
+    h+='<tr style="background:#FFF7ED;border-top:2px solid #FCD34D;cursor:pointer" data-distret-toggle="1">'+
+      '<td colspan="2" style="padding:10px 20px;color:#D97706;font-weight:700;font-size:12px">'+
+        '<span style="margin-right:6px">'+(retOpen?'▼':'▶')+'</span>'+
+        '➕ Lançar Retirada'+
+        (todasRet.length>0?'<span style="margin-left:10px;font-size:10px;background:#D97706;color:#fff;padding:2px 7px;border-radius:99px">'+todasRet.length+'</span>':'')+
+      '</td>'+
+    '</tr>';
+
+    if(retOpen){
+      // Formulário
+      h+='<tr style="background:#FFFBF0">'+
+        '<td colspan="2" style="padding:12px 20px">'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+            '<input id="distRetVal_acum" type="number" min="0" step="0.01" placeholder="Valor R$" '+
+              'style="width:130px;padding:5px 8px;border:1.5px solid #FCD34D;border-radius:6px;font-size:12px;outline:none;background:#fff">'+
+            '<input id="distRetDat_acum" type="date" '+
+              'style="padding:5px 8px;border:1.5px solid #FCD34D;border-radius:6px;font-size:12px;outline:none;background:#fff">'+
+            '<input id="distRetObs_acum" type="text" placeholder="Observação (opcional)" '+
+              'style="flex:1;min-width:150px;padding:5px 8px;border:1.5px solid #FCD34D;border-radius:6px;font-size:12px;outline:none;background:#fff">'+
+            '<button data-distret-ym="'+ym+'" data-distret-acum="1" '+
+              'style="padding:5px 16px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">'+
+              'Registrar'+
+            '</button>'+
+          '</div>'+
+        '</td>'+
+      '</tr>';
+
+      // Histórico
+      if(todasRet.length>0){
+        todasRet.forEach(function(ret){
+          h+='<tr style="background:#FFFBEB;border-bottom:1px solid #FDE68A">'+
+            '<td style="padding:8px 20px;font-size:12px;color:#92400E">'+
+              '<span style="color:#D97706;margin-right:6px">↳</span>'+
+              '<span style="font-family:var(--mono);font-size:11px;color:#94a3b8;margin-right:8px">'+ret.data+'</span>'+
+              (ret.obs||'Retirada')+
+              '<span style="margin-left:8px;font-size:10px;color:#D97706;font-weight:600">('+fmtYM(ret._ym)+')</span>'+
+            '</td>'+
+            '<td style="padding:8px 20px;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:8px">'+
+              '<span style="font-family:var(--mono);font-size:13px;color:#DC2626;font-weight:700">- '+R$(ret.valor)+'</span>'+
+              '<button data-distdel-ym="'+ret._ym+'" data-distdel-id="'+ret.id+'" '+
+                'style="background:none;border:none;cursor:pointer;color:#DC2626;font-size:16px;font-weight:700;padding:0 4px">×</button>'+
+            '</td>'+
+          '</tr>';
+        });
+      }
+    }
+
+    // Total e saldo final (sempre visível)
+    if(todasRet.length>0){
+      h+='<tr style="background:#FFF7ED;border-top:1px solid #FCD34D">'+
+        '<td style="padding:10px 20px;color:#D97706;font-weight:700">Total de Retiradas no Ano</td>'+
+        '<td style="padding:10px 20px;text-align:right;font-family:var(--mono);font-weight:700;color:#DC2626">- '+R$(totalRetAno)+'</td>'+
+      '</tr>';
+      h+='<tr style="background:'+(sldFinalAno>=0?'#f0fdf4':'#fff1f2')+'">'+
+        '<td style="padding:12px 20px;font-weight:800;color:'+sfaG+'">Saldo Final (após retiradas)</td>'+
+        '<td style="padding:12px 20px;text-align:right;font-family:var(--mono);font-weight:800;color:'+sfaG+'">'+R$(sldFinalAno)+'</td>'+
+      '</tr>';
+    }
+
     h+='</tbody></table></div>';
   }
 
@@ -2865,6 +2976,15 @@ function dreResolve(subcat){
 document.addEventListener('click',function(e){
   var tr=e.target.closest('tr[data-dre-grp]');
   if(tr){DRE_EXP[tr.dataset.dreGrp]=!DRE_EXP[tr.dataset.dreGrp];renderDRE();}
+  // Toggle do formulário de retirada
+  var trToggle=e.target.closest('tr[data-distret-toggle]');
+  if(trToggle){DRE_EXP['__ret_acum__']=!DRE_EXP['__ret_acum__'];renderDistrib();return;}
+  // Botão registrar retirada
+  var btnRet=e.target.closest('button[data-distret-ym]');
+  if(btnRet){distAddRetirada(btnRet.dataset.distretYm, btnRet.dataset.distretAcum==='1');}
+  // Botão deletar retirada
+  var btnDel=e.target.closest('button[data-distdel-ym]');
+  if(btnDel){distDelRetirada(btnDel.dataset.distdelYm, parseInt(btnDel.dataset.distdelId));}
 });
 document.addEventListener('change',function(e){
   var sel=e.target.closest('select[data-dre-subcat]');
@@ -3371,6 +3491,36 @@ document.getElementById('fExDs').addEventListener('input',()=>{
   document.getElementById('fExCl').value=classifyExp(document.getElementById('fExDs').value,document.getElementById('fExSb').value);
 });
 
+function saveRev(){
+  var cl=document.getElementById('fRvCl');
+  var dt=document.getElementById('fRvDt');
+  var vl=document.getElementById('fRvVl');
+  var tp=document.getElementById('fRvTp');
+  if(!cl||!dt||!vl){toast('Erro interno: campos não encontrados.','err');return;}
+  var clVal=cl.value.trim();
+  var dtVal=dt.value;
+  var vlVal=parseFloat(vl.value);
+  if(!clVal||!dtVal||isNaN(vlVal)||vlVal<=0){
+    toast('Preencha os campos obrigatórios.','warn');return;
+  }
+  var ym=dtVal.slice(0,7);
+  var tpVal=tp?tp.value:'recurrent';
+  var rv={
+    id:uid(),ym:ym,client:clVal,date:dtVal,
+    value:vlVal,description:'',type:tpVal,_upd:Date.now()
+  };
+  if(!CACHE.revenues[ym])CACHE.revenues[ym]=[];
+  CACHE.revenues[ym].push(rv);
+  saveLocalCache();
+  cMo('mRev');
+  cl.value=''; dt.value=''; vl.value='';
+  toast('Receita adicionada.');
+  renderRevs();renderDash();
+  queueWrite('revenues',[rv]);
+}
+
+
+
 async function saveExp(){
   const ds=document.getElementById('fExDs').value.trim();
   const dt=document.getElementById('fExDt').value;
@@ -3560,6 +3710,16 @@ function renderExpHier(ops, prf){
 }
 
 // ── Helpers para grupos de lançamentos ──────────────────────────
+function setRvTp(id, tipo){
+  var ym = ymOf(S.month);
+  var rv = getRvs(ym).find(function(r){ return String(r.id)===String(id); });
+  if(!rv) return;
+  rv.type = tipo;
+  // Salvar no Sheets
+  queueWrite('revenues',[{id:rv.id, ym:rv.ym||ym, client:rv.client, date:rv.date, value:rv.value, description:rv.description||'', type:tipo}]);
+  saveLocalCache();
+}
+
 function rvSetTipo(sel){
   var id=sel.dataset.rvid;
   setRvTp(id, sel.value);
@@ -3879,6 +4039,36 @@ function openExpMo(){
 document.getElementById('fExDs').addEventListener('input',()=>{
   document.getElementById('fExCl').value=classifyExp(document.getElementById('fExDs').value,document.getElementById('fExSb').value);
 });
+
+function saveRev(){
+  var cl=document.getElementById('fRvCl');
+  var dt=document.getElementById('fRvDt');
+  var vl=document.getElementById('fRvVl');
+  var tp=document.getElementById('fRvTp');
+  if(!cl||!dt||!vl){toast('Erro interno: campos não encontrados.','err');return;}
+  var clVal=cl.value.trim();
+  var dtVal=dt.value;
+  var vlVal=parseFloat(vl.value);
+  if(!clVal||!dtVal||isNaN(vlVal)||vlVal<=0){
+    toast('Preencha os campos obrigatórios.','warn');return;
+  }
+  var ym=dtVal.slice(0,7);
+  var tpVal=tp?tp.value:'recurrent';
+  var rv={
+    id:uid(),ym:ym,client:clVal,date:dtVal,
+    value:vlVal,description:'',type:tpVal,_upd:Date.now()
+  };
+  if(!CACHE.revenues[ym])CACHE.revenues[ym]=[];
+  CACHE.revenues[ym].push(rv);
+  saveLocalCache();
+  cMo('mRev');
+  cl.value=''; dt.value=''; vl.value='';
+  toast('Receita adicionada.');
+  renderRevs();renderDash();
+  queueWrite('revenues',[rv]);
+}
+
+
 
 async function saveExp(){
   const ds=document.getElementById('fExDs').value.trim();
