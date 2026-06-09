@@ -348,6 +348,13 @@ tbody td.dim{color:var(--t3);font-size:11px}
 
 /* ── PRESENTATION ── */
 body.pres .pres-hide{display:none !important}
+/* ── EDITOR MODE ── */
+body.viewer .editor-only{display:none !important}
+/* Badge de modo no header */
+#editorBadge{display:none;align-items:center;gap:5px;padding:3px 10px;background:var(--co);color:#fff;border-radius:20px;font-size:10.5px;font-weight:600;cursor:pointer}
+#editorBadge svg{opacity:.8}
+body.editor #editorBadge{display:flex}
+
 .pbar{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--co);padding:7px 18px;align-items:center;justify-content:space-between;font-size:11.5px;color:#fff}
 body.pres .pbar{display:flex}
 body.pres #app{margin-top:34px}
@@ -547,7 +554,7 @@ body.pres #app{margin-top:34px}
           <span id="syncLbl">Sheets</span>
         </div>
       </div>
-      <div class="hr pres-hide">
+      <div class="hr pres-hide editor-only">
         <div class="dd" id="ddAcoes">
           <button class="hbtn primary" onclick="togDD('ddAcoes')">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
@@ -701,7 +708,7 @@ body.pres #app{margin-top:34px}
           <div><div class="pt">Receitas</div><div class="ps" id="rSub">—</div></div>
           <div class="pa">
             <button class="btn btn-o btn-sm" onclick="nav('import')">↑ Importar</button>
-            <button class="btn btn-p btn-sm pres-hide" onclick="openRevMo()">+ Adicionar</button>
+            <button class="btn btn-p btn-sm pres-hide editor-only" onclick="openRevMo()">+ Adicionar</button>
           </div>
         </div>
         <div class="mgrid" id="rMet" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -725,7 +732,7 @@ body.pres #app{margin-top:34px}
           <div class="pa">
             <button class="btn btn-o btn-sm" id="btnEV" onclick="togEV()">≡ Lista</button>
             <button class="btn btn-o btn-sm" onclick="nav('import')">↑ Importar</button>
-            <button class="btn btn-p btn-sm pres-hide" onclick="openExpMo()">+ Adicionar</button>
+            <button class="btn btn-p btn-sm pres-hide editor-only" onclick="openExpMo()">+ Adicionar</button>
           </div>
         </div>
         <div class="mgrid" id="eMet" style="grid-template-columns:repeat(4,1fr)"></div>
@@ -747,7 +754,7 @@ body.pres #app{margin-top:34px}
       <div id="pg-balance" class="page">
         <div class="ph">
           <div><div class="pt">Saldo Bancário</div><div class="ps">Saldo final por período</div></div>
-          <div class="pa"><button class="btn btn-p btn-sm pres-hide" onclick="openBalMo()">+ Registrar</button></div>
+          <div class="pa"><button class="btn btn-p btn-sm pres-hide editor-only" onclick="openBalMo()">+ Registrar</button></div>
         </div>
         <div class="g2 mb14">
           <div class="panel"><div class="ph2"><span class="pt2">Histórico</span></div><div id="balList"></div><div id="balEmpty" class="empty" style="display:none"><div class="ei">◈</div><div class="et">Nenhum saldo registrado</div></div></div>
@@ -780,7 +787,7 @@ body.pres #app{margin-top:34px}
       <div id="pg-pricing" class="page">
         <div class="ph">
           <div><div class="pt">Precificação</div><div class="ps">Calcule o custo e preço de cada serviço com base no histórico</div></div>
-          <div class="pa"><button class="btn btn-p btn-sm pres-hide" onclick="openSvcMo()">+ Novo Serviço</button></div>
+          <div class="pa"><button class="btn btn-p btn-sm pres-hide editor-only" onclick="openSvcMo()">+ Novo Serviço</button></div>
         </div>
         <div class="mgrid" style="grid-template-columns:repeat(3,1fr)" id="pricMet"></div>
         <div id="pricEmpty" class="empty" style="display:none"><div class="ei">💲</div><div class="et">Nenhum serviço cadastrado</div><div class="es">Clique em "+ Novo Serviço" para começar</div></div>
@@ -830,7 +837,7 @@ body.pres #app{margin-top:34px}
                   ↑ Importar XLSX
                   <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="tcvImport(event,'renovacao')">
                 </label>
-                <button class="btn btn-p btn-sm" onclick="openTcvMo('renovacao')">+ Adicionar</button>
+                <button class="btn btn-p btn-sm" onclick="openTcvMo('renovacao')" class="btn btn-p btn-sm editor-only">+ Adicionar</button>
               </div>
             </div>
             <div id="tcvRenovEmpty" class="empty" style="display:none"><div class="ei">🔄</div><div class="et">Sem renovações neste mês</div></div>
@@ -856,7 +863,7 @@ body.pres #app{margin-top:34px}
                   ↑ Importar XLSX
                   <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="tcvImport(event,'monetizacao')">
                 </label>
-                <button class="btn btn-p btn-sm" onclick="openTcvMo('monetizacao')">+ Adicionar</button>
+                <button class="btn btn-p btn-sm" onclick="openTcvMo('monetizacao')" class="btn btn-p btn-sm editor-only">+ Adicionar</button>
               </div>
             </div>
             <div id="tcvMonetEmpty" class="empty" style="display:none"><div class="ei">💡</div><div class="et">Sem monetizações neste mês</div></div>
@@ -882,7 +889,7 @@ body.pres #app{margin-top:34px}
                   ↑ Importar XLSX
                   <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="tcvImport(event,'novas')">
                 </label>
-                <button class="btn btn-p btn-sm" onclick="openTcvMo('novas')">+ Adicionar</button>
+                <button class="btn btn-p btn-sm" onclick="openTcvMo('novas')" class="btn btn-p btn-sm editor-only">+ Adicionar</button>
               </div>
             </div>
             <div id="tcvNovasEmpty" class="empty" style="display:none"><div class="ei">🆕</div><div class="et">Sem novas vendas neste mês</div></div>
@@ -943,11 +950,38 @@ body.pres #app{margin-top:34px}
 
 
 
+        <!-- MODO EDITOR -->
+        <div class="panel mb14" id="panelEditorMode">
+          <div class="ph2" style="padding-bottom:0">
+            <span class="pt2">🔐 Modo Editor</span>
+          </div>
+          <div class="pb" style="padding-top:14px">
+            <div id="editorModeOff">
+              <p style="font-size:12.5px;color:var(--t2);margin:0 0 12px">Você está em modo <strong>Visualização</strong>. Para editar dados, insira a senha de administrador.</p>
+              <div style="display:flex;gap:8px;align-items:center;max-width:320px">
+                <input type="password" id="editorPwdInput" placeholder="Senha de administrador" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r);font-size:12.5px;background:var(--surface);color:var(--t1);font-family:var(--font)" onkeydown="if(event.key==='Enter')tryEnterEditorMode()">
+                <button class="btn btn-p btn-sm" onclick="tryEnterEditorMode()">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  Entrar
+                </button>
+              </div>
+              <p id="editorPwdErr" style="display:none;font-size:11.5px;color:var(--red);margin:8px 0 0">Senha incorreta. Tente novamente.</p>
+            </div>
+            <div id="editorModeOn" style="display:none">
+              <p style="font-size:12.5px;color:var(--t2);margin:0 0 12px">Você está em modo <strong style="color:var(--co)">Editor</strong>. Sessão expira após 20 minutos de inatividade.</p>
+              <button class="btn btn-d btn-sm" onclick="exitEditorMode()">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                Sair do modo Editor
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- DADOS DA EMPRESA -->
         <div class="panel mb14">
           <div class="ph2" style="padding-bottom:0">
             <span class="pt2">Dados da Empresa</span>
-            <button class="btn btn-p btn-sm" id="btnSaveCfg" onclick="saveCfg()" style="display:none">
+            <button class="btn btn-p btn-sm" id="btnSaveCfg" onclick="saveCfg()" data-editor-only="1" style="display:none">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
               Salvar
             </button>
@@ -3441,7 +3475,7 @@ function renderRevs(){
         '<select class="is" data-rvids="'+g.ids.join(',')+'" onchange="rvSetTipoGrupo(this)">'+tipoSel+'</select>'+
         tcvGrupo+
       '</td>'+
-      '<td><button class="bico pres-hide" data-rvids="'+g.ids.join(',')+'" onclick="rvDelGrupo(this)">'+TSVG+'</button></td>'+
+      '<td><button class="bico pres-hide editor-only" data-rvids="'+g.ids.join(',')+'" onclick="rvDelGrupo(this)">'+TSVG+'</button></td>'+
     '</tr>';
 
     // Linhas filhas (expandidas)
@@ -3470,7 +3504,7 @@ function renderRevs(){
             '<select class="is" data-rvid="'+r.id+'" onchange="rvSetTipo(this)">'+tipoSelR+'</select>'+
             tcvR+
           '</td>'+
-          '<td><button class="bico pres-hide" data-rvid="'+r.id+'" onclick="rvDel(this)">'+TSVG+'</button></td>'+
+          '<td><button class="bico pres-hide editor-only" data-rvid="'+r.id+'" onclick="rvDel(this)">'+TSVG+'</button></td>'+
         '</tr>';
       });
     }
@@ -3660,7 +3694,7 @@ function buildExpRows(items, color){
         html+='<option value="'+cl[0]+'"'+(v.classification===cl[0]?' selected':'')+'>'+cl[1]+'</option>';
       });
       html+='</select>';
-      html+='<button class="bico pres-hide" onclick="delEx(&quot;'+v.ids[0]+'&quot;)">'+TSVG+'</button>';
+      html+='<button class="bico pres-hide editor-only" onclick="delEx(&quot;'+v.ids[0]+'&quot;)">'+TSVG+'</button>';
       html+='</div></div>';
     });
     html+='</div></div></div>';
@@ -3990,7 +4024,7 @@ function renderRevs(){
         '<select class="is" data-rvids="'+g.ids.join(',')+'" onchange="rvSetTipoGrupo(this)">'+tipoSel+'</select>'+
         tcvGrupo+
       '</td>'+
-      '<td><button class="bico pres-hide" data-rvids="'+g.ids.join(',')+'" onclick="rvDelGrupo(this)">'+TSVG+'</button></td>'+
+      '<td><button class="bico pres-hide editor-only" data-rvids="'+g.ids.join(',')+'" onclick="rvDelGrupo(this)">'+TSVG+'</button></td>'+
     '</tr>';
 
     // Linhas filhas (expandidas)
@@ -4019,7 +4053,7 @@ function renderRevs(){
             '<select class="is" data-rvid="'+r.id+'" onchange="rvSetTipo(this)">'+tipoSelR+'</select>'+
             tcvR+
           '</td>'+
-          '<td><button class="bico pres-hide" data-rvid="'+r.id+'" onclick="rvDel(this)">'+TSVG+'</button></td>'+
+          '<td><button class="bico pres-hide editor-only" data-rvid="'+r.id+'" onclick="rvDel(this)">'+TSVG+'</button></td>'+
         '</tr>';
       });
     }
@@ -4209,7 +4243,7 @@ function buildExpRows(items, color){
         html+='<option value="'+cl[0]+'"'+(v.classification===cl[0]?' selected':'')+'>'+cl[1]+'</option>';
       });
       html+='</select>';
-      html+='<button class="bico pres-hide" onclick="delEx(&quot;'+v.ids[0]+'&quot;)">'+TSVG+'</button>';
+      html+='<button class="bico pres-hide editor-only" onclick="delEx(&quot;'+v.ids[0]+'&quot;)">'+TSVG+'</button>';
       html+='</div></div>';
     });
     html+='</div></div></div>';
@@ -4314,7 +4348,7 @@ function renderExps(){
         '<td class="mono">'+R$(row.value)+'</td>'+
         '<td class="dim">'+row.subcategory+'</td>'+
         '<td><select class="is" data-ids="'+row.ids.join(',')+'" onchange="setExClHier(this)">'+clsOpts+'</select></td>'+
-        '<td><button class="bico pres-hide" onclick="delEx(&quot;'+row.ids[0]+'&quot;)">'+TSVG+'</button></td>'+
+        '<td><button class="bico pres-hide editor-only" onclick="delEx(&quot;'+row.ids[0]+'&quot;)">'+TSVG+'</button></td>'+
       '</tr>';
     }).join('');
   }
@@ -4364,7 +4398,7 @@ function renderBal(){
   if(!entries.length){list.innerHTML='';empty.style.display='block';}
   else{
     empty.style.display='none';
-    list.innerHTML=entries.map(([ym,v])=>`<div class="bi"><div><div class="bm">${fmtYM(ym)}</div>${v.obs?`<div class="bo">${v.obs}</div>`:''}</div><div style="display:flex;align-items:center;gap:6px"><span class="bv2">${R$(+v.value)}</span><button class="bico pres-hide" onclick="delBl('${ym}')">${TSVG}</button></div></div>`).join('');
+    list.innerHTML=entries.map(([ym,v])=>`<div class="bi"><div><div class="bm">${fmtYM(ym)}</div>${v.obs?`<div class="bo">${v.obs}</div>`:''}</div><div style="display:flex;align-items:center;gap:6px"><span class="bv2">${R$(+v.value)}</span><button class="bico pres-hide editor-only" onclick="delBl('${ym}')">${TSVG}</button></div></div>`).join('');
   }
   const labels=entries.map(([y])=>fmtYM(y).slice(0,3).toUpperCase()+"'"+y.split('-')[0].slice(2));
   const vals=entries.map(([,v])=>+v.value);
@@ -4558,8 +4592,8 @@ function renderPricing(){
     return`<div class="pric-svc">
       <div class="pric-svc-hdr" onclick="togPricDetail('${svc.id}')">
         <span class="pric-svc-nm">${svc.name}</span>
-        <button class="bico edit pres-hide" onclick="event.stopPropagation();editSvc('${svc.id}')" title="Editar"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="bico pres-hide" onclick="event.stopPropagation();delSvc('${svc.id}')">${TSVG}</button>
+        <button class="bico edit pres-hide editor-only" onclick="event.stopPropagation();editSvc('${svc.id}')" title="Editar"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="bico pres-hide editor-only" onclick="event.stopPropagation();delSvc('${svc.id}')">${TSVG}</button>
       </div>
       <div class="pric-detail" id="pd-${svc.id}" style="display:none">
         ${buildSvcDetail(svc,cost,price)}
@@ -5254,7 +5288,7 @@ function renderImpHist(){
         <div class="imp-name">${h.fname} <span class="badge ${h.type==='revenue'?'br':'bu'}" style="font-size:9px">${h.type==='revenue'?'Receitas':'Despesas'}</span></div>
         <div class="imp-meta">${dtStr} · ${h.count} registros</div>
       </div>
-      <button class="bico pres-hide" onclick="delImpEntry('${h.id}')" title="Remover">${TSVG}</button>
+      <button class="bico pres-hide editor-only" onclick="delImpEntry('${h.id}')" title="Remover">${TSVG}</button>
     </div>`;
   }).join('');
 }
