@@ -5615,24 +5615,38 @@ async function tryEnterEditorMode(){
   var pwd = inp ? inp.value.trim() : '';
   if(!pwd){ if(err) err.style.display='block'; return; }
   if(err) err.style.display='none';
+
+  function _activateEditor(){
+    window._editorToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
+    _editorApplyUI();
+    _editorResetTimer();
+    if(inp) inp.value = '';
+    toast('Modo Editor ativado. Expira em 20 min de inatividade.');
+  }
+
+  function _wrongPassword(){
+    if(err) err.style.display='block';
+    if(inp){ inp.value=''; inp.focus(); }
+  }
+
+  // Senha padrão — validada localmente primeiro
+  var LOCAL_PWD = '200692@VZ';
+  if(pwd === LOCAL_PWD){ _activateEditor(); return; }
+
+  // Senha diferente da padrão — tentar validar via Sheets
   showLoading('Verificando senha…');
   try{
     var res  = await fetch(CFG.api + '?action=checkPassword&password=' + encodeURIComponent(pwd));
     var data = await res.json();
     hideLoading();
     if(data.ok && data.result && data.result.valid){
-      window._editorToken = Date.now().toString(36) + Math.random().toString(36).slice(2);
-      _editorApplyUI();
-      _editorResetTimer();
-      if(inp) inp.value = '';
-      toast('Modo Editor ativado. Expira em 20 min de inatividade.');
+      _activateEditor();
     } else {
-      if(err) err.style.display='block';
-      if(inp){ inp.value=''; inp.focus(); }
+      _wrongPassword();
     }
   } catch(e){
     hideLoading();
-    toast('Erro ao verificar senha. Verifique a conexão.','error');
+    _wrongPassword();
   }
 }
 
